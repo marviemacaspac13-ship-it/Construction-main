@@ -1,0 +1,354 @@
+/* ── TRACE motion system ───────────────────────────────────────────────
+Small, reusable animation primitives. No new colors are introduced —
+everything here rides on the existing theme tokens (--foreground,
+--border, --accent, etc.) so the palette never changes, only motion.
+──────────────────────────────────────────────────────────────────── */
+
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(-4px);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.02) translateY(0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+
+@keyframes glowPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+  }
+}
+
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+
+  to {
+    background-position: 200% 0;
+  }
+}
+
+
+@keyframes spinSlow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* Whole-screen entrance — applied to each screen's root container */
+.animate-page-in {
+  animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease both;
+}
+
+
+.animate-scale-in {
+  animation: scaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+.animate-pop-in {
+  animation: popIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+.animate-slide-right {
+  animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+.animate-slide-left {
+  animation: slideInLeft 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+/* Stagger helper — pair with inline style={{ animationDelay: '..ms' }} */
+.animate-stagger {
+  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+
+/* Hover-lift for cards / tiles */
+.hover-lift {
+  transition:
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.22s ease,
+    background-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+
+.hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+}
+
+
+/* Press-down feedback for buttons */
+.press-scale {
+  transition:
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+
+.press-scale:hover {
+  transform: translateY(-1px);
+}
+
+
+.press-scale:active {
+  transform: translateY(0) scale(0.97);
+}
+
+
+/* Animated underline for active nav / tab items */
+.underline-grow {
+  position: relative;
+}
+
+
+.underline-grow::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+
+.underline-grow.is-active::after {
+  transform: scaleX(1);
+}
+
+
+/* Subtle shimmer sweep, e.g. for loading/skeleton or the primary CTA */
+.shimmer-surface {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%
+  );
+
+  background-size: 200% 100%;
+  animation: shimmer 2.2s ease-in-out infinite;
+}
+
+
+.animate-glow-pulse {
+  animation: glowPulse 2.4s ease-in-out infinite;
+}
+
+
+.animate-spin-slow {
+  animation: spinSlow 6s linear infinite;
+}
+
+
+/* ── Border beam ─────────────────────────────────────────────────────
+   Subtle highlight travelling LEFT → RIGHT along the card border.
+
+   The pseudo-element is clipped into a 1px border ring so the beam
+   never appears inside the card.
+
+   The underlying card border remains completely unchanged.
+──────────────────────────────────────────────────────────────────── */
+
+
+@keyframes borderBeamLeftRight {
+  from {
+    background-position: 0% 0;
+  }
+
+  to {
+    background-position: -300% 0;
+  }
+}
+
+.border-beam {
+  position: relative;
+  isolation: isolate;
+}
+
+
+/*
+ * The beam itself.
+ *
+ * It is slightly larger than the card so the rounded corners are
+ * covered correctly, but the mask removes everything except the
+ * border ring.
+ */
+ .border-beam::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      transparent 38%,
+      rgba(255, 255, 255, 0.08) 45%,
+      rgba(255, 255, 255, 0.75) 50%,
+      rgba(255, 255, 255, 0.08) 55%,
+      transparent 62%,
+      transparent 100%
+    );
+
+  background-size: 300% 100%;
+  background-position: 0% 0;
+
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+
+  -webkit-mask-composite: xor;
+
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+
+  mask-composite: exclude;
+
+  animation: borderBeamLeftRight 8s linear infinite;
+
+  pointer-events: none;
+  z-index: 2;
+}
+
+
+/* Keep the actual card contents above the animated border */
+.border-beam > * {
+  position: relative;
+  z-index: 3;
+}
+
+
+/* ── Reduced motion ─────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .border-beam::before {
+    animation: none !important;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-in,
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-pop-in,
+  .animate-slide-right,
+  .animate-slide-left,
+  .animate-stagger,
+  .animate-glow-pulse,
+  .animate-spin-slow,
+  .shimmer-surface {
+    animation: none !important;
+  }
+
+  .hover-lift:hover,
+  .press-scale:hover,
+  .press-scale:active {
+    transform: none !important;
+  }
+}

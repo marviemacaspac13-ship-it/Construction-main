@@ -1,0 +1,32 @@
+# Secrets - these hold live Supabase keys and plaintext passwords
+.env
+.env.local
+backend/.env
+passwords.md
+
+# Dependencies
+node_modules/
+backend/.venv/
+
+# Build output
+dist/
+.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Runtime data
+backend/templates/
+backend/runs/
+*.pt
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Session documentation (generated, kept local)
+CLAUDE.md
+CHANGES.md
+docs/

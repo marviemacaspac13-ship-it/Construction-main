@@ -1,0 +1,366 @@
+[
+    {
+        "item_id":  "CHB01",
+        "item_name":  "Concrete Hollow Blocks",
+        "unit":  "4 inches / Per Pc",
+        "price":  12.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "CHB02",
+        "item_name":  "Concrete Hollow Blocks",
+        "unit":  "6 inches / Per Pc",
+        "price":  18.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "CMT01",
+        "item_name":  "Cement",
+        "unit":  "40kg / per bag",
+        "price":  261.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "GVF01",
+        "item_name":  "Gravel",
+        "unit":  "Per cu.m",
+        "price":  2268.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "SND01",
+        "item_name":  "Screened Sand",
+        "unit":  "Per cu.m",
+        "price":  1432.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "SND02",
+        "item_name":  "Sand",
+        "unit":  "Per cu.m",
+        "price":  1317.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "DB01",
+        "item_name":  "Deformed Bars",
+        "unit":  "10mm / Per pc",
+        "price":  156.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "DB02",
+        "item_name":  "Deformed Bars",
+        "unit":  "12mm / Per pc",
+        "price":  221.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "DB03",
+        "item_name":  "Deformed Bars",
+        "unit":  "16mm / Per pc",
+        "price":  392.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "GI01",
+        "item_name":  "Galvanized Iron Tie Wire",
+        "unit":  "#16 Per kg",
+        "price":  15.00,
+        "category":  "structural"
+    },
+    {
+        "item_id":  "ELW01",
+        "item_name":  "THHN Wire",
+        "unit":  "#6 AWG / Per meter",
+        "price":  120.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "ELW02",
+        "item_name":  "THHN Wire",
+        "unit":  "#8 AWG / Per meter",
+        "price":  84.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "ELW03",
+        "item_name":  "THHN Wire",
+        "unit":  "#10 AWG / Per meter",
+        "price":  52.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "ELW04",
+        "item_name":  "THHN Wire",
+        "unit":  "#12 AWG / Per meter",
+        "price":  38.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "ELW05",
+        "item_name":  "THHN Wire",
+        "unit":  "#14 AWG / Per meter",
+        "price":  24.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "JCB01",
+        "item_name":  "Junction Box with Cover",
+        "unit":  "Per pc",
+        "price":  18.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "UTB01",
+        "item_name":  "Utility Box",
+        "unit":  "Per pc",
+        "price":  15.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "GS01",
+        "item_name":  "1-Gang Switch",
+        "unit":  "Per set",
+        "price":  142.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "GS02",
+        "item_name":  "2-Gang Switch",
+        "unit":  "Per set",
+        "price":  210.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "GS03",
+        "item_name":  "3-Gang Switch",
+        "unit":  "Per set",
+        "price":  276.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "SW01",
+        "item_name":  "1-Gang 1-Way Switch",
+        "unit":  "Per set",
+        "price":  132.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "SW02",
+        "item_name":  "2-Gang 1-Way Switch",
+        "unit":  "Per set",
+        "price":  169.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "SW03",
+        "item_name":  "3-Gang 1-Way Switch",
+        "unit":  "Per set",
+        "price":  188.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "OT01",
+        "item_name":  "1-Gang Outlet",
+        "unit":  "Per set",
+        "price":  73.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "OT02",
+        "item_name":  "2-Gang Outlet",
+        "unit":  "Per set",
+        "price":  107.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "OT03",
+        "item_name":  "3-Gang Outlet",
+        "unit":  "Per set",
+        "price":  156.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "ACO01",
+        "item_name":  "1-Gang AC Outlet",
+        "unit":  "Per set",
+        "price":  56.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "FPVC01",
+        "item_name":  "Flexible PVC",
+        "unit":  "Per Meter",
+        "price":  6.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "CLR01",
+        "item_name":  "Ceiling Receptacle",
+        "unit":  "3 1/2 / Per Set",
+        "price":  22.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "CLR02",
+        "item_name":  "Ceiling Receptacle",
+        "unit":  "4 1/2 / Per Set",
+        "price":  26.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "CLR03",
+        "item_name":  "Ceiling Receptacle",
+        "unit":  "2 1/4 / Per Set",
+        "price":  19.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "PB01",
+        "item_name":  "Panel Board",
+        "unit":  null,
+        "price":  1890.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "CBR01",
+        "item_name":  "Circuit Breaker",
+        "unit":  "15A / Per Pc",
+        "price":  297.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "CBR02",
+        "item_name":  "Circuit Breaker",
+        "unit":  "20A / Per Pc",
+        "price":  312.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "CBR03",
+        "item_name":  "Circuit Breaker",
+        "unit":  "30A / Per Pc",
+        "price":  351.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "CBR04",
+        "item_name":  "Circuit Breaker",
+        "unit":  "60A / Per Pc",
+        "price":  399.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "CBR05",
+        "item_name":  "Circuit Breaker",
+        "unit":  "100A / Per Pc",
+        "price":  440.00,
+        "category":  "electrical"
+    },
+    {
+        "item_id":  "PCSP01",
+        "item_name":  "PVC Conduit/Supply Pipe (Blue)",
+        "unit":  "1/2\" / 3meter",
+        "price":  72.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PCSP02",
+        "item_name":  "PVC Conduit/Supply Pipe (Blue)",
+        "unit":  "3/4\" / 3 meter",
+        "price":  94.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PDP01",
+        "item_name":  "PVC Drain Pipe (Orange)",
+        "unit":  "2\" / 3 meter",
+        "price":  333.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PDP02",
+        "item_name":  "PVC Drain Pipe (Orange)",
+        "unit":  "3\" / 3 meter",
+        "price":  487.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PDP03",
+        "item_name":  "PVC Drain Pipe (Orange)",
+        "unit":  "4\" / 3 meter",
+        "price":  758.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVTB01",
+        "item_name":  "PVC Tee (Blue)",
+        "unit":  "1/2\" / Per pc",
+        "price":  5.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVTB02",
+        "item_name":  "PVC Tee (Blue)",
+        "unit":  "3/4\" / Per pc",
+        "price":  8.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVTO01",
+        "item_name":  "PVC Tee (Orange)",
+        "unit":  "2\" / Per pc",
+        "price":  33.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVTO02",
+        "item_name":  "PVC Tee (Orange)",
+        "unit":  "3\" / Per pc",
+        "price":  51.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVTO03",
+        "item_name":  "PVC Tee (Orange)",
+        "unit":  "4\" / Per pc",
+        "price":  88.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVYB01",
+        "item_name":  "PVC Y Tee (Blue)",
+        "unit":  "1/2\" / Per pc",
+        "price":  61.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVYB02",
+        "item_name":  "PVC Y Tee (Blue)",
+        "unit":  "3/4\" / Per pc",
+        "price":  87.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVYO01",
+        "item_name":  "PVC Y Tee (Orange)",
+        "unit":  "2\" / Per Pc",
+        "price":  32.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVYO02",
+        "item_name":  "PVC Y Tee (Orange)",
+        "unit":  "3\" / Per Pc",
+        "price":  65.00,
+        "category":  "plumbing"
+    },
+    {
+        "item_id":  "PVYO03",
+        "item_name":  "PVC Y Tee (Orange)",
+        "unit":  "4\" / Per pc",
+        "price":  79.00,
+        "category":  "plumbing"
+    }
+]

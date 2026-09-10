@@ -1,0 +1,34 @@
+train: images/train
+val: images/val
+
+nc: 28  
+
+names:
+  0: chb_4in
+  1: chb_6in
+  2: cement_bag
+  3: rebar
+  4: tie_wire
+  5: switch_1gang
+  6: switch_2gang
+  7: switch_3gang
+  8: switch_1gang_1way
+  9: switch_2gang_1way
+  10: switch_3gang_1way
+  11: outlet_1gang
+  12: outlet_2gang
+  13: outlet_3gang
+  14: ac_outlet
+  15: thhn_wire
+  16: junction_box
+  17: utility_box
+  18: flexible_pvc
+  19: ceiling_receptacle
+  20: panel_board
+  21: circuit_breaker
+  22: supply_pipe
+  23: drain_pipe
+  24: pvc_tee_blue
+  25: pvc_tee_orange
+  26: pvc_y_tee_blue
+  27: pvc_y_tee_orange
