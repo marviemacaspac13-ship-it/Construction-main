@@ -76,10 +76,28 @@ class Room(BaseModel):
 
 
 class ConcreteElement(BaseModel):
+    """A pour, optionally described well enough to reinforce.
+
+    Volume alone cannot be reinforced: steel depends on how many members
+    there are and what shape each one is, not on how much concrete they
+    add up to. An element that carries member geometry gets rebar; one
+    that carries only a volume is priced as concrete and left unreinforced.
+    """
+
     id: str
     kind: Literal["footing", "column", "beam", "slab"]
     volume_m3: float = Field(gt=0)
     mix_class: MixClass = "A"
+
+    # Identical members this line stands for, and the size of one of them.
+    count: int = Field(1, ge=1)
+    width_m: Optional[float] = Field(None, gt=0)
+    length_m: Optional[float] = Field(None, gt=0)
+    height_m: Optional[float] = Field(None, gt=0)
+
+    @property
+    def is_reinforceable(self) -> bool:
+        return None not in (self.width_m, self.length_m, self.height_m)
 
 
 class Run(BaseModel):

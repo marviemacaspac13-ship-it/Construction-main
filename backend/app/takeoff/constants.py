@@ -7,7 +7,7 @@ means bumping the version rather than silently shifting past estimates.
 """
 
 # Bump on ANY change to a number in this file or to a rule formula.
-RULES_VERSION = "2026.09.11"
+RULES_VERSION = "2026.09.11b"
 
 # --- masonry -------------------------------------------------------------
 # 0.40 m x 0.20 m block face = 0.08 m^2 -> 12.5 pcs per m^2 of wall.
@@ -34,6 +34,16 @@ CONCRETE_MIX_PER_M3: dict[str, dict[str, float]] = {
 # a slab on grade does not, and Class B is normal practice for it.
 FRAME_MIX_CLASS = "A"
 SLAB_MIX_CLASS = "B"
+
+# Clear concrete cover, metres. A code requirement rather than a
+# preference: footings are cast against earth and need the most, a slab on
+# grade the least. Sets how much shorter than its member each bar runs.
+CONCRETE_COVER_M: dict[str, float] = {
+    "footing": 0.075,
+    "column": 0.040,
+    "beam": 0.040,
+    "slab": 0.020,
+}
 
 CEMENT_ITEM = "CMT01"
 SAND_ITEM = "SND02"

@@ -54,6 +54,19 @@ class EstimatingParams(BaseModel):
     footing_thickness_m: float = Field(0.20, gt=0, le=2)
     slab_thickness_m: float = Field(0.10, ge=0, le=1)
 
+    # Steel inside that frame. Assumed for the same reason the sections are:
+    # a plan that does not state its column schedule does not state its bar
+    # schedule either. Defaults are common PH residential practice - 4-12mm
+    # verticals with 10mm ties, 10mm mats and a 10mm slab mesh.
+    column_bars: int = Field(4, ge=0)
+    column_bar_item_id: str = "DB02"
+    column_tie_spacing_m: float = Field(0.20, gt=0)
+    column_tie_item_id: str = "DB01"
+    footing_bar_spacing_m: float = Field(0.20, gt=0)
+    footing_bar_item_id: str = "DB01"
+    slab_mesh_spacing_m: float = Field(0.25, gt=0)
+    slab_mesh_item_id: str = "DB01"
+
     def assumption_lines(self) -> list[str]:
         """Human-readable assumptions, surfaced on every estimate."""
         lines = [
@@ -73,5 +86,14 @@ class EstimatingParams(BaseModel):
                 f"on {self.footing_width_m:g} x {self.footing_length_m:g} x "
                 f"{self.footing_thickness_m:g} m footings, with a "
                 f"{self.slab_thickness_m:g} m slab on grade."
+            )
+            lines.append(
+                f"Frame steel assumed with it: {self.column_bars} x "
+                f"{self.column_bar_item_id} per column with {self.column_tie_item_id} ties "
+                f"at {self.column_tie_spacing_m:g} m, {self.footing_bar_item_id} footing "
+                f"mats at {self.footing_bar_spacing_m:g} m each way, and a "
+                f"{self.slab_mesh_item_id} slab mesh at {self.slab_mesh_spacing_m:g} m "
+                f"each way. Lap splices are not counted separately; the rebar waste "
+                f"allowance is the only slack."
             )
         return lines

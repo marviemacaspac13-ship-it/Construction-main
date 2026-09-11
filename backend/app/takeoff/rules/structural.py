@@ -4,6 +4,7 @@ None of these quantities come from counting symbols. They are derived from
 wall geometry and poured volumes.
 """
 
+import math
 from collections import defaultdict
 
 from app.takeoff.bom import BomLine
@@ -12,6 +13,7 @@ from app.takeoff.constants import (
     CHB_ITEM,
     CHB_MORTAR_PER_M2,
     CHB_PER_M2,
+    CONCRETE_COVER_M,
     CONCRETE_MIX_PER_M3,
     GRAVEL_ITEM,
     SAND_ITEM,
@@ -19,7 +21,7 @@ from app.takeoff.constants import (
 )
 from app.takeoff.params import EstimatingParams
 from app.takeoff.rules.common import bars_across, rebar_mass_kg, with_waste
-from app.takeoff.schema import PlanSchema
+from app.takeoff.schema import ConcreteElement, PlanSchema
 from app.takeoff.units import spec_for
 
 
@@ -28,6 +30,7 @@ def compute(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
     lines += _masonry_and_mortar(plan, params)
     lines += _concrete(plan, params)
     lines += _reinforcement(plan, params)
+    lines += _frame_reinforcement(plan, params)
     return lines
 
 
@@ -155,3 +158,149 @@ def _reinforcement(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
             inputs={"rebar_mass_kg": round(mass_kg, 4)},
         ),
     ]
+
+
+def _bar_lines(
+    item_id: str, length_m: float, rule: str, derivation: str, params: EstimatingParams
+) -> list[BomLine]:
+    """One bar purchase plus the tie wire that goes with it.
+
+    Bars are bought by the 6 m length, so the quantity is metres over stick
+    length. merge_bom folds these into whatever else buys the same SKU -
+    slab mesh and CHB wall bars are both DB01 and must appear as one line.
+    """
+    if length_m <= 0:
+        return []
+
+    stick_length = spec_for(item_id).stick_length_m
+    if stick_length is None:
+        raise ValueError(f"{item_id} has no stick length; it cannot be used as rebar")
+
+    with_slack = with_waste(length_m, params.rebar_waste)
+    mass_kg = rebar_mass_kg(item_id, with_slack)
+    return [
+        BomLine(
+            item_id=item_id,
+            quantity=with_slack / stick_length,
+            rule=rule,
+            derivation=(
+                f"{derivation} = {length_m:.2f} m of {item_id} "
+                f"+ {params.rebar_waste:.0%} waste, / {stick_length} m per length"
+            ),
+            inputs={"rebar_length_m": round(length_m, 4)},
+        ),
+        BomLine(
+            item_id=TIE_WIRE_ITEM,
+            quantity=mass_kg * params.tie_wire_kg_per_100kg_rebar / 100.0,
+            rule="structural.tie_wire",
+            derivation=(
+                f"{mass_kg:.2f} kg of {item_id} x "
+                f"{params.tie_wire_kg_per_100kg_rebar} kg tie wire per 100 kg"
+            ),
+            inputs={"rebar_mass_kg": round(mass_kg, 4)},
+        ),
+    ]
+
+
+def _mat_length_m(clear_w: float, clear_l: float, spacing_m: float) -> float:
+    """Bars both ways over a rectangle: each way spans one side, spaced along the other."""
+    if clear_w <= 0 or clear_l <= 0:
+        return 0.0
+    return (
+        bars_across(clear_l, spacing_m) * clear_w
+        + bars_across(clear_w, spacing_m) * clear_l
+    )
+
+
+def _column_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
+    cover = CONCRETE_COVER_M["column"]
+    lines: list[BomLine] = []
+
+    verticals_m = el.count * params.column_bars * el.height_m
+    lines += _bar_lines(
+        params.column_bar_item_id,
+        verticals_m,
+        "structural.column_bars",
+        (
+            f"{el.count} columns x {params.column_bars} verticals x "
+            f"{el.height_m:g} m"
+        ),
+        params,
+    )
+
+    # A tie is a closed loop just inside the cover on all four faces.
+    tie_w = el.width_m - 2 * cover
+    tie_d = el.length_m - 2 * cover
+    if tie_w > 0 and tie_d > 0:
+        ties_each = math.ceil(el.height_m / params.column_tie_spacing_m) + 1
+        loop_m = 2 * (tie_w + tie_d)
+        lines += _bar_lines(
+            params.column_tie_item_id,
+            el.count * ties_each * loop_m,
+            "structural.column_ties",
+            (
+                f"{el.count} columns x {ties_each} ties at "
+                f"{params.column_tie_spacing_m:g} m o.c. x {loop_m:.2f} m per loop "
+                f"({el.width_m:g} x {el.length_m:g} m less {cover:g} m cover)"
+            ),
+            params,
+        )
+    return lines
+
+
+def _footing_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
+    cover = CONCRETE_COVER_M["footing"]
+    clear_w = el.width_m - 2 * cover
+    clear_l = el.length_m - 2 * cover
+    per_footing = _mat_length_m(clear_w, clear_l, params.footing_bar_spacing_m)
+    return _bar_lines(
+        params.footing_bar_item_id,
+        el.count * per_footing,
+        "structural.footing_bars",
+        (
+            f"{el.count} footings x a mat at {params.footing_bar_spacing_m:g} m o.c. "
+            f"each way over {clear_w:.2f} x {clear_l:.2f} m clear "
+            f"({per_footing:.2f} m each)"
+        ),
+        params,
+    )
+
+
+def _slab_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
+    cover = CONCRETE_COVER_M["slab"]
+    clear_w = el.width_m - 2 * cover
+    clear_l = el.length_m - 2 * cover
+    mesh_m = el.count * _mat_length_m(clear_w, clear_l, params.slab_mesh_spacing_m)
+    return _bar_lines(
+        params.slab_mesh_item_id,
+        mesh_m,
+        "structural.slab_mesh",
+        (
+            f"mesh at {params.slab_mesh_spacing_m:g} m o.c. each way over "
+            f"{clear_w:.2f} x {clear_l:.2f} m clear"
+        ),
+        params,
+    )
+
+
+_STEEL_BY_KIND = {
+    "column": _column_steel,
+    "footing": _footing_steel,
+    "slab": _slab_steel,
+}
+
+
+def _frame_reinforcement(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
+    """Steel inside the concrete elements.
+
+    Only elements that describe their members are reinforced. A volume with
+    no geometry - a hand-entered pour, say - is priced as concrete and left
+    bare rather than reinforced on a guess. Beams have no rule yet.
+    """
+    lines: list[BomLine] = []
+    for element in plan.concrete:
+        steel = _STEEL_BY_KIND.get(element.kind)
+        if steel is None or not element.is_reinforceable:
+            continue
+        lines += steel(element, params)
+    return lines

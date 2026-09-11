@@ -93,6 +93,8 @@ def derive_frame(
     slab_area_m2 = envelope_w_m * envelope_l_m
     slab_m3 = slab_area_m2 * params.slab_thickness_m
 
+    # Each element carries the size of one member and how many there are,
+    # not just the total volume - steel cannot be derived from volume alone.
     elements: list[ConcreteElement] = []
     if footings_m3 > 0:
         elements.append(
@@ -101,6 +103,10 @@ def derive_frame(
                 kind="footing",
                 volume_m3=footings_m3,
                 mix_class=FRAME_MIX_CLASS,
+                count=count,
+                width_m=params.footing_width_m,
+                length_m=params.footing_length_m,
+                height_m=params.footing_thickness_m,
             )
         )
     if columns_m3 > 0:
@@ -110,6 +116,10 @@ def derive_frame(
                 kind="column",
                 volume_m3=columns_m3,
                 mix_class=FRAME_MIX_CLASS,
+                count=count,
+                width_m=params.column_width_m,
+                length_m=params.column_depth_m,
+                height_m=params.default_wall_height_m,
             )
         )
     if slab_m3 > 0:
@@ -119,6 +129,10 @@ def derive_frame(
                 kind="slab",
                 volume_m3=slab_m3,
                 mix_class=SLAB_MIX_CLASS,
+                count=1,
+                width_m=envelope_w_m,
+                length_m=envelope_l_m,
+                height_m=params.slab_thickness_m,
             )
         )
 

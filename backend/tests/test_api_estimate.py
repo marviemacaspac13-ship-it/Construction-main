@@ -129,13 +129,16 @@ def test_real_plan_image_prices_end_to_end():
     assert any("Concrete is assumed, not read" in w for w in ex["warnings"])
 
     est = body["estimate"]
-    assert est["grand_total"] == pytest.approx(210003.30)
+    assert est["grand_total"] == pytest.approx(257262.70)
     assert est["unpriced"] == []
     assert {li["item_id"] for li in est["line_items"]} >= {
         "CHB01", "CHB02", "CMT01", "SND02", "DB01", "GI01",
         "GVF01",  # gravel reaches an estimate only through concrete
     }
     assert any("Structural frame assumed" in a for a in est["assumptions"])
+    assert any("Frame steel assumed" in a for a in est["assumptions"])
+    # Slab mesh and CHB wall bars are both DB01 and must be one purchase.
+    assert len([li for li in est["line_items"] if li["item_id"] == "DB01"]) == 1
 
 # --- POST /api/estimate/image, detection path ---------------------------
 
