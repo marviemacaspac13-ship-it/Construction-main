@@ -41,12 +41,30 @@ def test_cad_square_reads_exactly():
 
 
 @pytest.mark.skipif(not (PLANS / "02.jpg").exists(), reason="plan images not present")
-def test_notebook_read_is_wrong_and_says_so():
-    """The hand-drawn plan misreads its width - the area check must catch it."""
+def test_notebook_recovers_its_width_from_the_printed_overall():
+    """OCR misses a segment of this plan top chain, which used to shrink it.
+
+    The chain reads 390 + 370 = 760 against a printed 830, so the width came
+    out 7.60 m instead of 8.30 and the area check flagged the building as
+    108% accounted for. The overall is one read of one number and a chain can
+    only lose segments, so the overall wins and the width is now exact.
+    """
     ex = read_plan(str(PLANS / "02.jpg"))
-    assert ex.area.accounted_ratio > 1.05
-    assert any("more than the whole building" in w for w in ex.warnings())
-    assert ex.confidence < 0.85
+    assert (round(ex.envelope_w_m, 2), round(ex.envelope_l_m, 2)) == (8.3, 13.5)
+    assert ex.walls.total_m == pytest.approx(73.6)
+    assert ex.area.accounted_ratio < 1.05
+
+
+@pytest.mark.skipif(not (PLANS / "02.jpg").exists(), reason="plan images not present")
+def test_the_recovered_width_is_not_passed_off_as_verified():
+    """Right answer, unproven: the chain still does not close and says so."""
+    ex = read_plan(str(PLANS / "02.jpg"))
+    broken = [c for c in ex.chain_checks if not c.ok]
+    assert len(broken) == 1
+    assert broken[0].stated_total == 830
+    assert broken[0].total == 760
+    assert any("does not close" in w for w in ex.warnings())
+    assert ex.confidence < 0.6
 
 
 @pytest.mark.skipif(not (PLANS / "04.jpg").exists(), reason="plan images not present")

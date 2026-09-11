@@ -30,6 +30,10 @@ LABEL_MAX_DX = 120
 LINE_TOLERANCE = 16
 MIN_SCORE = 0.55
 MAX_DROPPED_PER_CHAIN = 2
+# How much of a printed overall a chain must already account for before the
+# overall is believed to describe the same span. A chain that covers a third
+# of some number is probably not a broken reading of it.
+MIN_CHAIN_COVERAGE = 0.5
 
 OPPOSITE = {"top": "bottom", "bottom": "top", "left": "right", "right": "left"}
 
@@ -39,7 +43,8 @@ class Band:
     name: str
     segments: list[float] | None = None
     total: float | None = None
-    stated: bool = False  # True when an overall was printed and matched
+    stated: bool = False  # the total came from an overall printed on the drawing
+    closed: bool = False  # ...and the segments actually sum to it
 
 
 def _has_dims(box: TextBox) -> bool:
@@ -118,6 +123,21 @@ def _match_chain(chain: list[TextBox], total: float) -> list[float] | None:
     return min(candidates)[2]
 
 
+def _overall_above(singles: list[float], chain_sum: float) -> float | None:
+    """A printed overall that an incomplete chain plausibly belongs to.
+
+    Takes the closest one above the chain sum, so the unexplained remainder
+    is the smallest that fits, and only when the chain already covers most
+    of it.
+    """
+    above = [
+        s
+        for s in singles
+        if s > chain_sum and chain_sum >= s * MIN_CHAIN_COVERAGE
+    ]
+    return min(above) if above else None
+
+
 def _resolve_band(name: str, boxes: list[TextBox]) -> Band:
     usable = [b for b in boxes if b.score >= MIN_SCORE and (b.value or 0) > 0]
     lines = _cluster_lines(usable, name)
@@ -135,13 +155,27 @@ def _resolve_band(name: str, boxes: list[TextBox]) -> Band:
 
     if best is not None:
         band.segments, band.total = best
-        band.stated = True
+        band.stated = band.closed = True
         return band
 
     longest = max(chains, key=len, default=None)
-    if longest is not None:
-        band.segments = [b.value for b in longest]
-        band.total = sum(band.segments)
+    if longest is None:
+        return band
+
+    band.segments = [b.value for b in longest]
+    chain_sum = sum(band.segments)
+    band.total = chain_sum
+
+    # The chain did not close on anything. If the edge nonetheless printed an
+    # overall, believe the overall: it is one read of one number, while the
+    # chain is many reads and a missed segment can only make it too SHORT.
+    # The total is corrected and the chain still goes out unclosed, so the
+    # checksum reports the gap rather than the gap silently shrinking the
+    # building.
+    overall = _overall_above(singles, chain_sum)
+    if overall is not None:
+        band.total = overall
+        band.stated = True
     return band
 
 
@@ -184,13 +218,14 @@ def extraction_from_boxes(boxes: list[TextBox]) -> PlanExtraction:
         if band.stated or not band.segments:
             continue
         twin = bands[OPPOSITE[name]]
-        if twin.stated and twin.total:
+        if twin.closed and twin.total:
             matched = _match_chain(
                 [b for b in banded[name] if b.score >= MIN_SCORE and (b.value or 0) > 0],
                 twin.total,
             )
             if matched is not None:
-                band.segments, band.total, band.stated = matched, twin.total, True
+                band.segments, band.total = matched, twin.total
+                band.stated = band.closed = True
 
     chains = [
         (band.segments, band.total)
