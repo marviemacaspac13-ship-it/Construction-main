@@ -103,6 +103,44 @@ def _dedupe(boxes: list[TextBox]) -> list[TextBox]:
     return sorted(kept, key=lambda b: (b.cy, b.cx))
 
 
+def merge_boxes(*groups: list[TextBox]) -> list[TextBox]:
+    """Union of several box lists with duplicates dropped."""
+    combined: list[TextBox] = []
+    for group in groups:
+        combined += group
+    return _dedupe(combined)
+
+
+def read_region(
+    image: np.ndarray, x1: int, y1: int, x2: int, y2: int
+) -> list[TextBox]:
+    """Read one crop of the image, in full-image coordinates.
+
+    The point is not resolution - it is that the text detector proposes
+    different regions on a small image than on a busy full page. Small
+    dimension text that the whole-page pass walks straight past is found at
+    the SAME scale once the page around it is gone.
+    """
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(image.shape[1], x2), min(image.shape[0], y2)
+    if x2 - x1 < 2 or y2 - y1 < 2:
+        return []
+
+    crop = image[y1:y2, x1:x2]
+    engine = _engine()
+    height = crop.shape[0]
+
+    upright, _ = engine(crop)
+    boxes = _boxes_from(upright, height, rotated=False)
+
+    rotated, _ = engine(cv2.rotate(crop, cv2.ROTATE_90_CLOCKWISE))
+    boxes += _boxes_from(rotated, height, rotated=True)
+
+    return [
+        TextBox(b.text, b.cx + x1, b.cy + y1, b.score, b.rotated) for b in boxes
+    ]
+
+
 def read_image(path: str | Path) -> list[TextBox]:
     """Every text box on the plan, upright and rotated passes merged."""
     image = cv2.imread(str(path))

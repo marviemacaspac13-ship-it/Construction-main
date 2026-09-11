@@ -21,7 +21,7 @@ from itertools import combinations
 import cv2
 import numpy as np
 
-from app.extract.ocr import TextBox, read_array, read_image
+from app.extract.ocr import DEDUPE_RADIUS, TextBox, merge_boxes, read_array, read_region
 from app.extract.to_plan import PlanExtraction, extract_plan
 from app.extract.tokens import ROOM_DIM_RE, classify_tag
 
@@ -30,6 +30,8 @@ LABEL_MAX_DX = 120
 LINE_TOLERANCE = 16
 MIN_SCORE = 0.55
 MAX_DROPPED_PER_CHAIN = 2
+# Half-width of the crop taken around a room label that found no dimensions.
+RESCUE_PAD = 90
 # How much of a printed overall a chain must already account for before the
 # overall is believed to describe the same span. A chain that covers a third
 # of some number is probably not a broken reading of it.
@@ -179,17 +181,79 @@ def _resolve_band(name: str, boxes: list[TextBox]) -> Band:
     return band
 
 
+def _is_label(box: TextBox) -> bool:
+    return not box.is_number and not _has_dims(box)
+
+
+def _pairs_with(label: TextBox, dim: TextBox) -> bool:
+    """True when a dimension box sits just under a label, as room dims do."""
+    return 0 < dim.cy - label.cy <= LABEL_MAX_DY and abs(dim.cx - label.cx) <= LABEL_MAX_DX
+
+
+def unpaired_labels(boxes: list[TextBox]) -> list[TextBox]:
+    """Labels with no dimension under them.
+
+    A room label is written above its size, so a label on its own usually
+    means the size was there and went unread - which is the one case worth
+    looking at the image again for.
+    """
+    dims = [b for b in boxes if _has_dims(b)]
+    return [
+        box
+        for box in boxes
+        if _is_label(box) and not any(_pairs_with(box, dim) for dim in dims)
+    ]
+
+
+def _already_known(box: TextBox, dims: list[TextBox]) -> bool:
+    """True when a dimension box is already placed here by the full-page read."""
+    return any(
+        abs(d.cx - box.cx) <= DEDUPE_RADIUS and abs(d.cy - box.cy) <= DEDUPE_RADIUS
+        for d in dims
+    )
+
+
+def rescue_dimensions(image, boxes: list[TextBox]) -> list[TextBox]:
+    """Re-read the neighbourhood of every label that found no dimensions.
+
+    Two guards, both learned the hard way. A rescued box is kept only if it
+    is a dimension that PAIRS WITH THE LABEL that triggered the crop - the
+    crop was taken because that label had no size, so anything else in it is
+    not what we came for. And never where a dimension already sits: a crop
+    around a junk label re-read a known 324x240 as a truncated 324x2 and
+    invented a second kitchen out of it. The full-page pass saw more context
+    and wins every tie.
+
+    Costs one pair of OCR calls per unpaired label, and plans that read
+    cleanly have none - two of the four samples never enter this path.
+    """
+    dims = [b for b in boxes if _has_dims(b)]
+    found: list[TextBox] = []
+    for label in unpaired_labels(boxes):
+        region = read_region(
+            image,
+            int(label.cx) - RESCUE_PAD,
+            int(label.cy) - RESCUE_PAD,
+            int(label.cx) + RESCUE_PAD,
+            int(label.cy) + RESCUE_PAD,
+        )
+        found += [
+            b
+            for b in region
+            if _has_dims(b)
+            and _pairs_with(label, b)
+            and not _already_known(b, dims)
+        ]
+    return merge_boxes(boxes, found)
+
+
 def _rooms(boxes: list[TextBox]) -> list[str]:
     dim_boxes = [b for b in boxes if _has_dims(b)]
-    labels = [b for b in boxes if not b.is_number and not _has_dims(b)]
+    labels = [b for b in boxes if _is_label(b)]
 
     blocks: list[str] = []
     for dim in dim_boxes:
-        candidates = [
-            lab
-            for lab in labels
-            if 0 < dim.cy - lab.cy <= LABEL_MAX_DY and abs(lab.cx - dim.cx) <= LABEL_MAX_DX
-        ]
+        candidates = [lab for lab in labels if _pairs_with(lab, dim)]
         if candidates:
             label = min(candidates, key=lambda lab: dim.cy - lab.cy)
             blocks.append(f"{label.text} {dim.text}")
@@ -242,12 +306,16 @@ def extraction_from_boxes(boxes: list[TextBox]) -> PlanExtraction:
 
 def read_plan(path: str) -> PlanExtraction:
     """Full path: image file -> validated, metric extraction."""
-    return extraction_from_boxes(read_image(path))
+    image = cv2.imread(str(path))
+    if image is None:
+        raise ValueError(f"could not read image: {path}")
+    return read_plan_array(image)
 
 
 def read_plan_array(image) -> PlanExtraction:
     """Same, for an image already decoded in memory (an HTTP upload)."""
-    return extraction_from_boxes(read_array(image))
+    boxes = rescue_dimensions(image, read_array(image))
+    return extraction_from_boxes(boxes)
 
 
 def read_plan_bytes(raw: bytes) -> PlanExtraction:

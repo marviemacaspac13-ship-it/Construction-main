@@ -68,6 +68,20 @@ def test_the_recovered_width_is_not_passed_off_as_verified():
 
 
 @pytest.mark.skipif(not (PLANS / "04.jpg").exists(), reason="plan images not present")
+def test_the_scan_recovers_the_room_the_full_page_pass_missed():
+    """W/C 192x138 is never proposed by the detector on the whole page.
+
+    It reads perfectly at the same scale once cropped, so a label with no
+    dimension under it earns a second look. Missing it shortened the wall
+    length and lowered the assumed opening count with it.
+    """
+    ex = read_plan(str(PLANS / "04.jpg"))
+    assert len(ex.rooms_m) == 8
+    assert any(round(r.width, 2) == 1.92 and round(r.length, 2) == 1.38 for r in ex.rooms_m)
+    assert ex.walls.total_m == pytest.approx(66.95)
+
+
+@pytest.mark.skipif(not (PLANS / "04.jpg").exists(), reason="plan images not present")
 def test_unreadable_opening_tags_fall_back_to_an_assumption():
     """The schedule tags on this scan are not recoverable by OCR.
 
