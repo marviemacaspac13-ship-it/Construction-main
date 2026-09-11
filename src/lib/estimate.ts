@@ -18,11 +18,15 @@ declare global {
 
 const API_URL = import.meta.env.VITE_SCAN_API_URL ?? "http://localhost:8000";
 
-/** Plan types the image reader understands. Others need symbol detection. */
-export const IMAGE_ESTIMATE_PLAN_TYPES = ["Floor Plan"];
+/**
+ * Plan types whose quantities come from printed dimensions. Everything else
+ * is estimated by counting symbols against uploaded references. Both go to
+ * the same endpoint; this only decides what the progress captions say.
+ */
+export const OCR_PLAN_TYPES = ["Floor Plan"];
 
-export function supportsImageEstimate(planType: string | undefined): boolean {
-  return IMAGE_ESTIMATE_PLAN_TYPES.includes(planType ?? "");
+export function readsPrintedDimensions(planType: string | undefined): boolean {
+  return OCR_PLAN_TYPES.includes(planType ?? "");
 }
 
 export type PricedLine = {
@@ -66,6 +70,10 @@ export type ExtractionReport = {
   total_wall_m: number;
   doors: number;
   windows: number;
+  /** Concrete is derived from the envelope and assumed sections, never read.
+   *  Null means no frame was derived - not a frame of zero volume. */
+  column_count: number | null;
+  concrete_volume_m3: number | null;
   chains: ChainReport[];
   confidence: number;
   warnings: string[];
@@ -82,7 +90,8 @@ export type Estimate = {
 };
 
 export type ImageEstimate = {
-  extraction: ExtractionReport;
+  /** Null on the detection path - nothing was read, so there is nothing to report. */
+  extraction: ExtractionReport | null;
   estimate: Estimate;
 };
 

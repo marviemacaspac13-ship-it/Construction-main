@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { PixelLogo } from "../components/PixelLogo";
 import { useLocation, useNavigate } from "react-router";
-import { scanPlan } from "../../lib/scan";
-import { estimateFromImage, supportsImageEstimate } from "../../lib/estimate";
-import { markProjectError, updateProjectEstimate, updateProjectResults } from "../../lib/projects";
+import { estimateFromImage, readsPrintedDimensions } from "../../lib/estimate";
+import { markProjectError, updateProjectEstimate } from "../../lib/projects";
 
 type NavState = { projectId?: string; planType?: string; file?: File };
 
@@ -16,7 +15,7 @@ const OCR_STEPS = [
   "Generating cost estimate...",
 ];
 
-/** Matching uploaded symbol references against the drawing. */
+/** Counting uploaded symbol references against the drawing. */
 const DETECTION_STEPS = [
   "Initializing analysis engine...",
   "Detecting structural elements...",
@@ -35,7 +34,7 @@ export function ScanningScreen() {
   const [error, setError]       = useState("");
   const ran = useRef(false);
 
-  const readsDimensions = supportsImageEstimate(planType);
+  const readsDimensions = readsPrintedDimensions(planType);
   const steps = readsDimensions ? OCR_STEPS : DETECTION_STEPS;
 
   useEffect(() => {
@@ -57,16 +56,11 @@ export function ScanningScreen() {
       });
     }, 90);
 
-    // Floor plans carry their own dimensions, so they are read and priced
-    // from geometry. Everything else falls back to symbol matching, which
-    // needs reference images uploaded in the Symbol Library.
-    const work = readsDimensions
-      ? estimateFromImage(file, planType!).then((result) =>
-          updateProjectEstimate(projectId, result)
-        )
-      : scanPlan(file).then((result) => updateProjectResults(projectId, result));
-
-    work
+    // One endpoint for every plan type. Floor plans are read from their
+    // printed dimensions; the rest are counted against uploaded symbol
+    // references. The backend picks the path and prices both the same way.
+    estimateFromImage(file, planType ?? "Floor Plan")
+      .then((result) => updateProjectEstimate(projectId, result))
       .then(() => {
         clearInterval(tick);
         setProgress(100);

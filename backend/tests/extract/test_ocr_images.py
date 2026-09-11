@@ -50,8 +50,16 @@ def test_notebook_read_is_wrong_and_says_so():
 
 
 @pytest.mark.skipif(not (PLANS / "04.jpg").exists(), reason="plan images not present")
-def test_missing_opening_tags_are_reported():
-    """Openings missed by OCR inflate masonry; that must not pass silently."""
+def test_unreadable_opening_tags_fall_back_to_an_assumption():
+    """The schedule tags on this scan are not recoverable by OCR.
+
+    Deducting nothing over-estimated masonry by ~10%. Assuming one door and
+    one window per room is far closer, but it is an assumption and the
+    extraction has to say so rather than present it as a measurement.
+    """
     ex = read_plan(str(PLANS / "04.jpg"))
-    assert ex.windows == 0
-    assert any("over-estimated" in w for w in ex.warnings())
+    assert ex.openings_assumed
+    assert ex.doors == len(ex.rooms_m)
+    assert ex.windows == len(ex.rooms_m)
+    assert any("assumed from" in w for w in ex.warnings())
+    assert not any("over-estimated" in w for w in ex.warnings())

@@ -1,5 +1,6 @@
 """Assemble a validated extraction into the PlanSchema the rules consume."""
 
+import math
 from dataclasses import dataclass, field
 
 from app.extract.chains import ChainCheck, confidence_from_checks, validate_chain
@@ -7,6 +8,8 @@ from app.extract.geometry import AreaCheck, WallDerivation, check_area, derive_w
 from app.extract.tokens import RoomToken, count_openings, parse_rooms
 from app.extract.units_infer import UnitInference, infer_units
 from app.takeoff.constants import DEFAULT_DOOR_M, DEFAULT_WINDOW_M
+from app.takeoff.frame import FrameDerivation, derive_frame
+from app.takeoff.params import EstimatingParams
 from app.takeoff.schema import Opening, PlanSchema, PlanType, Room, Wall
 
 # Philippine residential practice: exterior walls 6", interior partitions 4".
@@ -27,6 +30,12 @@ class PlanExtraction:
     windows: int = 0
     walls: WallDerivation | None = None
     area: AreaCheck | None = None
+    # True when door/window counts were assumed from the room count rather
+    # than read off the drawing.
+    openings_assumed: bool = False
+    # The structural frame is never read - see app.takeoff.frame. None means
+    # no frame was derived at all, not a frame of zero volume.
+    frame: FrameDerivation | None = None
 
     @property
     def chain_confidence(self) -> float:
@@ -65,15 +74,30 @@ class PlanExtraction:
         # windows. Reading none means the schedule tags were missed, which
         # silently inflates the estimate - no opening is deducted from the
         # masonry. This is the one error mode the chain checksums cannot see.
-        if len(self.rooms_m) >= 2 and self.doors == 0:
+        if self.openings_assumed:
+            out.append(
+                f"Door and window tags could not be read, so {self.doors} doors and "
+                f"{self.windows} windows were assumed from {len(self.rooms_m)} rooms. "
+                f"Openings are estimated here, not measured."
+            )
+        elif len(self.rooms_m) >= 2 and self.doors == 0:
             out.append(
                 f"{len(self.rooms_m)} rooms but no door tags were read. No openings "
                 f"are being deducted, so masonry is over-estimated."
             )
-        elif len(self.rooms_m) >= 3 and self.windows == 0:
+        # Louder than the openings warning on purpose. A wrong opening count
+        # moves masonry by a few percent; a wrong column section moves the
+        # concrete lines by its square, and the slab alone is usually the
+        # largest single volume in the estimate.
+        if self.frame is not None:
             out.append(
-                f"{len(self.rooms_m)} rooms but no window tags were read; masonry is "
-                f"over-estimated by whatever the windows would have deducted."
+                f"Concrete is assumed, not read: {self.frame.column_count} columns of "
+                f"{self.frame.column_volume_m3:.2f} m^3 total, {self.frame.column_count} "
+                f"footings of {self.frame.footing_volume_m3:.2f} m^3, and a slab of "
+                f"{self.frame.slab_volume_m3:.2f} m^3 over {self.frame.slab_area_m2:.1f} "
+                f"m^2 - {self.frame.total_volume_m3:.2f} m^3 in all. No plan states its "
+                f"column schedule, so the sections come from settings; concrete scales "
+                f"with the square of the section, so check them before ordering."
             )
         if not self.rooms_m:
             out.append("No room dimensions were read; wall lengths cannot be derived.")
@@ -86,6 +110,7 @@ def extract_plan(
     room_blocks: list[str],
     chains: list[tuple[list[float], float]] | None = None,
     opening_tags: list[str] | None = None,
+    params: EstimatingParams | None = None,
 ) -> PlanExtraction:
     """Turn raw text read off a plan into a validated, metric extraction.
 
@@ -109,7 +134,19 @@ def extract_plan(
     w_m = units.to_metres(envelope_w)
     l_m = units.to_metres(envelope_l)
 
-    openings = count_openings(opening_tags or [])
+    params = params or EstimatingParams()
+    counted = count_openings(opening_tags or [])
+    doors, windows = counted["door"], counted["window"]
+
+    # A partial tag read is worse than none: recovering 1 door out of 6 would
+    # deduct almost nothing while looking like a measurement. Treat anything
+    # under half the room count as unread and assume instead.
+    plausible = doors >= len(rooms_m) * 0.5
+    openings_assumed = False
+    if len(rooms_m) >= 2 and not plausible:
+        doors = math.ceil(len(rooms_m) * params.doors_per_room)
+        windows = math.ceil(len(rooms_m) * params.windows_per_room)
+        openings_assumed = True
 
     extraction = PlanExtraction(
         envelope_w_m=w_m,
@@ -117,11 +154,13 @@ def extract_plan(
         rooms_m=rooms_m,
         units=units,
         chain_checks=checks,
-        doors=openings["door"],
-        windows=openings["window"],
+        doors=doors,
+        windows=windows,
+        openings_assumed=openings_assumed,
     )
     extraction.walls = derive_walls(rooms_m, w_m, l_m)
     extraction.area = check_area(rooms_m, w_m, l_m, extraction.walls.total_m)
+    extraction.frame = derive_frame(w_m, l_m, params)
     return extraction
 
 
@@ -194,4 +233,12 @@ def to_plan_schema(
         if room.area > 0
     ]
 
-    return PlanSchema(plan_type=plan_type, source="ocr", walls=walls, rooms=rooms)
+    concrete = list(extraction.frame.elements) if extraction.frame else []
+
+    return PlanSchema(
+        plan_type=plan_type,
+        source="ocr",
+        walls=walls,
+        rooms=rooms,
+        concrete=concrete,
+    )

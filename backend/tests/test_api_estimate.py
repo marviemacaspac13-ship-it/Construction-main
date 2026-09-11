@@ -8,6 +8,7 @@ over a real plan.
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -118,12 +119,91 @@ def test_real_plan_image_prices_end_to_end():
     assert ex["total_wall_m"] == pytest.approx(91.9)
     assert ex["confidence"] >= 0.9
     assert all(c["ok"] for c in ex["chains"])
-    # Openings are not read on this plan, and that must be stated.
-    assert any("over-estimated" in w for w in ex["warnings"])
+    # Openings could not be read, so they are assumed - and stated as assumed.
+    assert any("assumed from" in w for w in ex["warnings"])
+    assert ex["doors"] == 10 and ex["windows"] == 10
+
+    # Concrete is derived from the envelope, never read, and says so.
+    assert ex["column_count"] == 15
+    assert ex["concrete_volume_m3"] == pytest.approx(19.12)
+    assert any("Concrete is assumed, not read" in w for w in ex["warnings"])
 
     est = body["estimate"]
-    assert est["grand_total"] == pytest.approx(121189.74)
+    assert est["grand_total"] == pytest.approx(210003.30)
     assert est["unpriced"] == []
     assert {li["item_id"] for li in est["line_items"]} >= {
-        "CHB01", "CHB02", "CMT01", "SND02", "DB01", "GI01"
+        "CHB01", "CHB02", "CMT01", "SND02", "DB01", "GI01",
+        "GVF01",  # gravel reaches an estimate only through concrete
     }
+    assert any("Structural frame assumed" in a for a in est["assumptions"])
+
+# --- POST /api/estimate/image, detection path ---------------------------
+
+def test_electrical_plan_is_refused_when_no_references_exist():
+    """Refusing is right when nothing could possibly match."""
+    with patch("app.templates_store.list_templates", return_value={}):
+        res = client.post(
+            "/api/estimate/image",
+            files={"file": ("plan.png", b"x", "image/png")},
+            data={"plan_type": "Electrical Plan"},
+        )
+    assert res.status_code == 422
+    assert "Symbol Library" in res.json()["detail"]
+
+
+def test_electrical_plan_is_priced_from_detections_when_references_exist():
+    """The whole point of Task 13: this plan type can now be estimated."""
+    from app.schemas import Detection
+
+    detections = [
+        Detection(label="OT01", confidence=0.9, bbox=[0, 0, 1, 1]),
+        Detection(label="OT01", confidence=0.9, bbox=[2, 2, 3, 3]),
+        Detection(label="SW01", confidence=0.8, bbox=[4, 4, 5, 5]),
+    ]
+    with patch("app.templates_store.list_templates", return_value={"OT01": ["a.png"]}), \
+         patch("app.main.preprocess_image", return_value=np.zeros((10, 10, 3), np.uint8)), \
+         patch("app.main.match_templates", return_value=detections):
+        res = client.post(
+            "/api/estimate/image",
+            files={"file": ("plan.png", b"x", "image/png")},
+            data={"plan_type": "Electrical Plan"},
+        )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    # Nothing was "read", so there is no read-quality report.
+    assert body["extraction"] is None
+    est = body["estimate"]
+    assert est["plan_type"] == "Electrical Plan"
+    by_sku = {li["item_id"]: li["quantity"] for li in est["line_items"]}
+    assert by_sku["OT01"] == 2
+    assert by_sku["SW01"] == 1
+    assert by_sku["UTB01"] == 3  # one utility box per wiring device
+    assert est["grand_total"] > 0
+
+
+def test_plumbing_plan_is_priced_from_detections():
+    from app.schemas import Detection
+
+    detections = [Detection(label="PVTB01", confidence=0.9, bbox=[0, 0, 1, 1])] * 4
+    with patch("app.templates_store.list_templates", return_value={"PVTB01": ["a.png"]}), \
+         patch("app.main.preprocess_image", return_value=np.zeros((10, 10, 3), np.uint8)), \
+         patch("app.main.match_templates", return_value=detections):
+        res = client.post(
+            "/api/estimate/image",
+            files={"file": ("plan.png", b"x", "image/png")},
+            data={"plan_type": "Plumbing Plan"},
+        )
+    assert res.status_code == 200, res.text
+    est = res.json()["estimate"]
+    assert {li["item_id"]: li["quantity"] for li in est["line_items"]}["PVTB01"] == 4
+
+
+def test_an_unknown_plan_type_is_rejected():
+    res = client.post(
+        "/api/estimate/image",
+        files={"file": ("plan.png", b"x", "image/png")},
+        data={"plan_type": "Landscape Plan"},
+    )
+    assert res.status_code == 422
+    assert "Unknown plan type" in res.json()["detail"]

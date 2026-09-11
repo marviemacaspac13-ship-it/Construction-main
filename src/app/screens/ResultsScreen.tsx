@@ -45,6 +45,7 @@ function ReadQuality({ extraction }: { extraction: ExtractionReport }) {
       : "border-red-800 text-red-400 bg-red-950/30";
 
   const chainsOk = extraction.chains.filter((c) => c.ok).length;
+  const hasFrame = extraction.concrete_volume_m3 != null;
 
   return (
     <div className="mb-8 animate-stagger">
@@ -56,7 +57,11 @@ function ReadQuality({ extraction }: { extraction: ExtractionReport }) {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border">
+        <div
+          className={`grid grid-cols-2 divide-x divide-border ${
+            hasFrame ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-4"
+          }`}
+        >
           <div className="px-5 py-4">
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Envelope</p>
             <p className="text-[12px] font-mono text-foreground">
@@ -83,6 +88,17 @@ function ReadQuality({ extraction }: { extraction: ExtractionReport }) {
               {extraction.doors} doors &middot; {extraction.windows} windows
             </p>
           </div>
+          {hasFrame && (
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Concrete</p>
+              <p className="text-[12px] font-mono text-foreground">
+                {extraction.concrete_volume_m3!.toFixed(2)} m&sup3;
+              </p>
+              <p className="text-[10px] font-mono text-amber-500/80">
+                {extraction.column_count} columns &middot; assumed
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -134,8 +150,28 @@ export function ResultsScreen() {
   const estimatedItems = rows.reduce((sum, r) => sum + r.quantity, 0);
   const materialTypesCount = rows.length;
 
+  // Summing `quantity` across lines is only meaningful when every line is a
+  // count. An OCR estimate mixes pieces, bags, cubic metres and kilograms
+  // into one number, so show the wall length it was all derived from instead.
+  const thirdTile = project?.extraction
+    ? { label: "Wall Length", value: `${project.extraction.total_wall_m.toFixed(2)} m` }
+    : { label: "Estimated Items", value: estimatedItems.toLocaleString() };
+
   const breakdown = [...rows]
-    .map((r) => ({ label: r.item_name, total: r.line_total, pct: grandTotal ? (r.line_total / grandTotal) * 100 : 0 }))
+    .map((r) => {
+      // CHB01 and CHB02 are both named "Concrete Hollow Blocks" - only `unit`
+      // separates 4in from 6in. Deformed bars, THHN wire and breakers collide
+      // the same way. So the size belongs in the label, and the key must be
+      // the SKU: two siblings sharing a React key can be mismatched on
+      // re-render, and here that would animate the wrong bar.
+      const size = r.unit && r.unit.includes("/") ? r.unit.split("/")[0].trim() : null;
+      return {
+        id: r.item_id,
+        label: size ? `${r.item_name} (${size})` : r.item_name,
+        total: r.line_total,
+        pct: grandTotal ? (r.line_total / grandTotal) * 100 : 0,
+      };
+    })
     .sort((a, b) => b.total - a.total)
     .slice(0, 8);
 
@@ -241,7 +277,7 @@ export function ResultsScreen() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               <StatCard icon={<Wallet size={15} />} label="Total Estimated Cost" value={peso(grandTotal)} />
               <StatCard icon={<Box size={15} />} label="Material Types" value={String(materialTypesCount)} />
-              <StatCard icon={<ListChecks size={15} />} label="Estimated Items" value={estimatedItems.toLocaleString()} />
+              <StatCard icon={<ListChecks size={15} />} label={thirdTile.label} value={thirdTile.value} />
             </div>
 
             {project.extraction && <ReadQuality extraction={project.extraction} />}
@@ -249,8 +285,9 @@ export function ResultsScreen() {
             {rows.length === 0 && (
               <div className="border border-border rounded-lg p-6 bg-card mb-8">
                 <p className="text-[12px] font-mono text-muted-foreground">
-                  No materials were matched to the catalog for this scan. This usually means the detection model
-                  hasn't been trained on your plan symbols yet — see the Train Model screen.
+                  No materials were matched for this scan. Symbol matching compares your plan against
+                  reference images you upload, so it finds nothing until at least one is added — open the
+                  Symbol Library and add a clean crop of each symbol you want counted.
                 </p>
               </div>
             )}
@@ -295,8 +332,8 @@ export function ResultsScreen() {
                   <Mono className="block mb-5">Cost Breakdown</Mono>
                   <div className="space-y-3.5">
                     {breakdown.map((b) => (
-                      <div key={b.label} className="flex items-center gap-3">
-                        <span className="text-[11px] font-mono text-foreground w-24 truncate shrink-0">{b.label}</span>
+                      <div key={b.id} className="flex items-center gap-3">
+                        <span className="text-[11px] font-mono text-foreground w-36 truncate shrink-0" title={b.label}>{b.label}</span>
                         <div className="flex-1 h-2 rounded-full bg-accent overflow-hidden">
                           <div className="h-full bg-foreground/70 rounded-full transition-all duration-700" style={{ width: `${Math.max(2, b.pct)}%` }} />
                         </div>

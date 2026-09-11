@@ -18,14 +18,18 @@ from pydantic import BaseModel
 from app.extract.reader import read_plan_bytes
 from app.extract.report import ImageEstimateResponse, report_from_extraction
 from app.extract.to_plan import to_plan_schema
+from app.takeoff.from_detections import plan_from_detections
 from app.takeoff.estimator import EstimateResponse, estimate_plan
 from app.takeoff.params import EstimatingParams
 from app.takeoff.schema import PlanSchema
 
-# Reading geometry off an image currently works for floor plans only:
-# the extractor derives walls from printed room dimensions. Electrical and
-# plumbing plans need symbol detection, which is a different path.
-IMAGE_ESTIMATE_PLAN_TYPES = ("Floor Plan",)
+VALID_PLAN_TYPES = ("Floor Plan", "Electrical Plan", "Plumbing Plan")
+
+# Floor plans carry printed room dimensions, so they are read. Electrical
+# and plumbing plans do not - their quantities are discrete symbols, so
+# they are detected against uploaded references. Both paths end in the same
+# PlanSchema and the same rule engine.
+OCR_PLAN_TYPES = ("Floor Plan",)
 
 
 class EstimateRequest(BaseModel):
@@ -61,6 +65,18 @@ def health():
 async def scan_plan(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
+
+    # No reference images means nothing can possibly match. Returning an empty
+    # zero-peso estimate here looks like a successful scan of a plan with no
+    # materials on it, which is worse than saying so. An empty result AFTER
+    # templates exist is a real outcome and still returns 200.
+    if not templates_store.list_templates():
+        raise HTTPException(
+            422,
+            "No symbol references have been uploaded, so nothing can be matched. "
+            "Add a reference image for each catalog item in the Symbol Library, "
+            "then scan again.",
+        )
 
     raw_bytes = await file.read()
     image = preprocess_image(raw_bytes)
@@ -115,18 +131,31 @@ async def estimate_image(
     Returns the estimate alongside what the reader saw and how much of it
     checks out, so a low-confidence result is visible rather than implied.
     """
-    if plan_type not in IMAGE_ESTIMATE_PLAN_TYPES:
+    if plan_type not in VALID_PLAN_TYPES:
         raise HTTPException(
             422,
-            f"Image estimating supports {' / '.join(IMAGE_ESTIMATE_PLAN_TYPES)} only. "
-            f"A '{plan_type}' needs symbol detection, which requires reference images "
-            f"uploaded in the Symbol Library.",
+            f"Unknown plan type '{plan_type}'. Expected one of: "
+            f"{', '.join(VALID_PLAN_TYPES)}.",
         )
 
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
 
     raw_bytes = await file.read()
+
+    if plan_type in OCR_PLAN_TYPES:
+        plan, report = _read_plan(raw_bytes, plan_type)
+    else:
+        plan, report = _detect_plan(raw_bytes, plan_type)
+
+    return ImageEstimateResponse(
+        extraction=report,
+        estimate=estimate_plan(plan, load_catalog()),
+    )
+
+
+def _read_plan(raw_bytes: bytes, plan_type: str):
+    """Floor plans: read the printed dimensions and derive geometry."""
     try:
         extraction = read_plan_bytes(raw_bytes)
     except ValueError as exc:
@@ -144,8 +173,29 @@ async def estimate_image(
             },
         )
 
-    plan = to_plan_schema(extraction, plan_type)
-    return ImageEstimateResponse(
-        extraction=report_from_extraction(extraction),
-        estimate=estimate_plan(plan, load_catalog()),
-    )
+    return to_plan_schema(extraction, plan_type), report_from_extraction(extraction)
+
+
+def _detect_plan(raw_bytes: bytes, plan_type: str):
+    """Electrical and plumbing: count symbols against uploaded references.
+
+    With no references nothing can match, and an empty zero-peso estimate
+    would look like a successful scan of a plan with no materials on it.
+    Zero matches AFTER references exist is a real outcome and returns 200.
+    """
+    if not templates_store.list_templates():
+        raise HTTPException(
+            422,
+            f"No symbol references have been uploaded, so nothing on this "
+            f"{plan_type} can be matched. Add a reference image for each catalog "
+            f"item in the Symbol Library, then scan again.",
+        )
+
+    try:
+        image = preprocess_image(raw_bytes)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+    detections = match_templates(image)
+    # Detection supplies counts only; there is nothing "read" to report on.
+    return plan_from_detections(detections, plan_type), None

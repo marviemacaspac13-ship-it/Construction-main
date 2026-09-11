@@ -7,6 +7,7 @@ from app.extract.to_plan import extract_plan, to_plan_schema
 from app.extract.tokens import classify_tag, count_openings, parse_room
 from app.extract.units_infer import infer_units
 from app.takeoff.estimator import estimate_plan
+from app.takeoff.params import EstimatingParams
 from tests.fixtures.sample_plans import ALL_PLANS, CAD_WIDE, KERALA, NOTEBOOK
 
 
@@ -168,14 +169,47 @@ def test_cad_wide_wall_length_matches_hand_calculation():
     assert ex.walls.total_m == pytest.approx(91.9)
 
 
-def test_openings_reduce_the_block_count():
-    with_tags = extract_plan(
+def kerala(tags, params=None):
+    return extract_plan(
         KERALA.envelope_w, KERALA.envelope_l, KERALA.room_blocks, KERALA.chains,
-        KERALA.opening_tags,
+        tags, params,
     )
-    without = extract_plan(
-        KERALA.envelope_w, KERALA.envelope_l, KERALA.room_blocks, KERALA.chains, []
-    )
-    a = sum(w.opening_area_m2 for w in to_plan_schema(with_tags).walls)
-    b = sum(w.opening_area_m2 for w in to_plan_schema(without).walls)
-    assert a > b > -1
+
+
+def test_a_plausible_tag_read_is_used_rather_than_assumed():
+    """6 doors across 8 rooms is a believable read - trust it."""
+    ex = kerala(KERALA.opening_tags)
+    assert not ex.openings_assumed
+    assert (ex.doors, ex.windows) == (6, 9)
+
+
+def test_a_partial_tag_read_falls_back_to_the_assumption():
+    """One door across eight rooms is not a measurement.
+
+    Keeping it would deduct almost nothing while looking like a reading,
+    which is worse than admitting the tags were not recovered.
+    """
+    ex = kerala(["D1"])
+    assert ex.openings_assumed
+    assert ex.doors == len(ex.rooms_m)
+
+
+def test_assumed_openings_actually_deduct_area():
+    """Otherwise the assumption would be cosmetic."""
+    assumed = sum(w.opening_area_m2 for w in to_plan_schema(kerala([])).walls)
+    none_params = EstimatingParams(doors_per_room=0, windows_per_room=0)
+    nothing = sum(w.opening_area_m2 for w in to_plan_schema(kerala([], none_params)).walls)
+    assert assumed > 0
+    assert nothing == 0
+
+
+def test_read_tags_beat_the_assumption_on_the_final_price(catalog):
+    """The known-true counts must not be overridden by the fallback."""
+    read = estimate_plan(to_plan_schema(kerala(KERALA.opening_tags)), catalog)
+    assumed = estimate_plan(to_plan_schema(kerala([])), catalog)
+    assert read.grand_total != assumed.grand_total
+    # Both must land far below the no-openings case, which was ~10% high.
+    none_params = EstimatingParams(doors_per_room=0, windows_per_room=0)
+    zero = estimate_plan(to_plan_schema(kerala([], none_params)), catalog)
+    assert read.grand_total < zero.grand_total
+    assert assumed.grand_total < zero.grand_total

@@ -7,7 +7,7 @@ means bumping the version rather than silently shifting past estimates.
 """
 
 # Bump on ANY change to a number in this file or to a rule formula.
-RULES_VERSION = "2026.09.05"
+RULES_VERSION = "2026.09.11"
 
 # --- masonry -------------------------------------------------------------
 # 0.40 m x 0.20 m block face = 0.08 m^2 -> 12.5 pcs per m^2 of wall.
@@ -29,6 +29,11 @@ CONCRETE_MIX_PER_M3: dict[str, dict[str, float]] = {
     "B": {"cement_bags": 7.5, "sand_m3": 0.50, "gravel_m3": 1.00},   # 1:2.5:5
     "C": {"cement_bags": 6.0, "sand_m3": 0.50, "gravel_m3": 1.00},   # 1:3:6
 }
+
+# Mix class by element. Footings and columns carry load and get Class A;
+# a slab on grade does not, and Class B is normal practice for it.
+FRAME_MIX_CLASS = "A"
+SLAB_MIX_CLASS = "B"
 
 CEMENT_ITEM = "CMT01"
 SAND_ITEM = "SND02"
