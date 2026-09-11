@@ -7,6 +7,16 @@ are domain facts they should not.
 
 from pydantic import BaseModel, Field
 
+from app.takeoff.constants import (
+    COLUMN_SECTION_M,
+    COLUMN_STANDARD_HEIGHT_M,
+    COLUMN_TIES_PER_COLUMN,
+    FOOTING_BARS_EACH_WAY,
+    FOOTING_SIDE_M,
+    RULES_VERSION,
+    SLAB_MESH_M_PER_M2,
+)
+
 
 class EstimatingParams(BaseModel):
     # Geometry fallbacks
@@ -39,33 +49,21 @@ class EstimatingParams(BaseModel):
     doors_per_room: float = Field(1.0, ge=0)
     windows_per_room: float = Field(1.0, ge=0)
 
-    # Structural frame. No residential floor plan prints its column schedule,
-    # and the sections cannot be read off the drawing the way dimensions can,
-    # so every number below is an assumption rather than a measurement. It
-    # matters more than most: volume scales with the SQUARE of the column
-    # section, so 0.30 x 0.30 is 2.25x the concrete of 0.20 x 0.20. The
-    # defaults are the common Philippine single-storey residential sections.
+    # Structural frame, from Guide.docx. The sections, bar sizes and tie
+    # count are the project standard rather than an assumption now; what
+    # stays assumed is only where the frame SITS - how many columns, how
+    # they are spaced, and the footing thickness, none of which the guide
+    # states.
     include_frame: bool = True
-    column_width_m: float = Field(0.20, gt=0, le=2)
-    column_depth_m: float = Field(0.20, gt=0, le=2)
     column_spacing_m: float = Field(3.5, gt=0, le=12)
-    footing_width_m: float = Field(0.80, gt=0, le=5)
-    footing_length_m: float = Field(0.80, gt=0, le=5)
+    # GUIDE SILENT: footing plan size comes from the bar cut length, but its
+    # thickness is never given. Still an assumption.
     footing_thickness_m: float = Field(0.20, gt=0, le=2)
     slab_thickness_m: float = Field(0.10, ge=0, le=1)
-
-    # Steel inside that frame. Assumed for the same reason the sections are:
-    # a plan that does not state its column schedule does not state its bar
-    # schedule either. Defaults are common PH residential practice - 4-12mm
-    # verticals with 10mm ties, 10mm mats and a 10mm slab mesh.
-    column_bars: int = Field(4, ge=0)
-    column_bar_item_id: str = "DB02"
-    column_tie_spacing_m: float = Field(0.20, gt=0)
-    column_tie_item_id: str = "DB01"
-    footing_bar_spacing_m: float = Field(0.20, gt=0)
-    footing_bar_item_id: str = "DB01"
-    slab_mesh_spacing_m: float = Field(0.25, gt=0)
-    slab_mesh_item_id: str = "DB01"
+    # A perimeter tie beam. The guide specifies beams in full but says
+    # nothing about where they run, so running one round the envelope is
+    # the assumption.
+    include_perimeter_beam: bool = True
 
     def assumption_lines(self) -> list[str]:
         """Human-readable assumptions, surfaced on every estimate."""
@@ -80,20 +78,24 @@ class EstimatingParams(BaseModel):
             f"{self.windows_per_room:g} window are assumed per room.",
         ]
         if self.include_frame:
+            w, d = COLUMN_SECTION_M
             lines.append(
-                f"Structural frame assumed, not read: {self.column_width_m:g} x "
-                f"{self.column_depth_m:g} m columns at {self.column_spacing_m:g} m o.c. "
-                f"on {self.footing_width_m:g} x {self.footing_length_m:g} x "
-                f"{self.footing_thickness_m:g} m footings, with a "
-                f"{self.slab_thickness_m:g} m slab on grade."
+                f"Frame sections and steel follow the project guide "
+                f"(rules {RULES_VERSION}): {w:g} x {d:g} m columns "
+                f"{COLUMN_STANDARD_HEIGHT_M:g} m tall with {COLUMN_TIES_PER_COLUMN} ties "
+                f"each, {FOOTING_SIDE_M:g} m square footings with "
+                f"{FOOTING_BARS_EACH_WAY} bars each way, and a "
+                f"{SLAB_MESH_M_PER_M2:g} m/m^2 slab mesh."
             )
             lines.append(
-                f"Frame steel assumed with it: {self.column_bars} x "
-                f"{self.column_bar_item_id} per column with {self.column_tie_item_id} ties "
-                f"at {self.column_tie_spacing_m:g} m, {self.footing_bar_item_id} footing "
-                f"mats at {self.footing_bar_spacing_m:g} m each way, and a "
-                f"{self.slab_mesh_item_id} slab mesh at {self.slab_mesh_spacing_m:g} m "
-                f"each way. Lap splices are not counted separately; the rebar waste "
-                f"allowance is the only slack."
+                f"Where the frame SITS is still assumed: columns at "
+                f"{self.column_spacing_m:g} m o.c. round the envelope, "
+                f"{self.footing_thickness_m:g} m footing thickness, a "
+                f"{self.slab_thickness_m:g} m slab on grade"
+                + (", and a perimeter tie beam." if self.include_perimeter_beam else ".")
+            )
+            lines.append(
+                "Lap splices are not counted separately; the rebar waste allowance is "
+                "the only slack."
             )
         return lines

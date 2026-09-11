@@ -9,14 +9,22 @@ from collections import defaultdict
 
 from app.takeoff.bom import BomLine
 from app.takeoff.constants import (
+    BEAM_MAIN_BARS,
+    BEAM_STIRRUP_REST_SPACING_M,
+    BEAM_STIRRUP_ZONES,
     CEMENT_ITEM,
     CHB_ITEM,
     CHB_MORTAR_PER_M2,
     CHB_PER_M2,
     CONCRETE_COVER_M,
     CONCRETE_MIX_PER_M3,
+    COLUMN_TIES_PER_COLUMN,
+    FOOTING_BARS_EACH_WAY,
     GRAVEL_ITEM,
+    MAIN_BAR_ITEM,
     SAND_ITEM,
+    SLAB_MESH_M_PER_M2,
+    TIE_BAR_ITEM,
     TIE_WIRE_ITEM,
 )
 from app.takeoff.params import EstimatingParams
@@ -202,46 +210,94 @@ def _bar_lines(
     ]
 
 
-def _mat_length_m(clear_w: float, clear_l: float, spacing_m: float) -> float:
-    """Bars both ways over a rectangle: each way spans one side, spaced along the other."""
-    if clear_w <= 0 or clear_l <= 0:
-        return 0.0
-    return (
-        bars_across(clear_l, spacing_m) * clear_w
-        + bars_across(clear_w, spacing_m) * clear_l
-    )
+def _tie_loop_m(width_m: float, depth_m: float, cover_m: float) -> float:
+    """Perimeter of a closed tie just inside the cover on all four faces."""
+    w = width_m - 2 * cover_m
+    d = depth_m - 2 * cover_m
+    return 2 * (w + d) if w > 0 and d > 0 else 0.0
 
 
 def _column_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
-    cover = CONCRETE_COVER_M["column"]
+    """Guide: 4 x 16mm verticals and 24 x 10mm ties per standard column."""
     lines: list[BomLine] = []
 
-    verticals_m = el.count * params.column_bars * el.height_m
+    verticals_m = el.count * BEAM_MAIN_BARS * el.height_m
     lines += _bar_lines(
-        params.column_bar_item_id,
+        MAIN_BAR_ITEM,
         verticals_m,
         "structural.column_bars",
-        (
-            f"{el.count} columns x {params.column_bars} verticals x "
-            f"{el.height_m:g} m"
-        ),
+        f"{el.count} columns x {BEAM_MAIN_BARS} verticals x {el.height_m:g} m",
         params,
     )
 
-    # A tie is a closed loop just inside the cover on all four faces.
-    tie_w = el.width_m - 2 * cover
-    tie_d = el.length_m - 2 * cover
-    if tie_w > 0 and tie_d > 0:
-        ties_each = math.ceil(el.height_m / params.column_tie_spacing_m) + 1
-        loop_m = 2 * (tie_w + tie_d)
+    loop_m = _tie_loop_m(el.width_m, el.length_m, CONCRETE_COVER_M["column"])
+    if loop_m > 0:
         lines += _bar_lines(
-            params.column_tie_item_id,
-            el.count * ties_each * loop_m,
+            TIE_BAR_ITEM,
+            el.count * COLUMN_TIES_PER_COLUMN * loop_m,
             "structural.column_ties",
             (
-                f"{el.count} columns x {ties_each} ties at "
-                f"{params.column_tie_spacing_m:g} m o.c. x {loop_m:.2f} m per loop "
-                f"({el.width_m:g} x {el.length_m:g} m less {cover:g} m cover)"
+                f"{el.count} columns x {COLUMN_TIES_PER_COLUMN} ties x {loop_m:.2f} m "
+                f"per loop ({el.width_m:g} x {el.length_m:g} m less "
+                f"{CONCRETE_COVER_M['column']:g} m cover)"
+            ),
+            params,
+        )
+    return lines
+
+
+def beam_stirrup_count(length_m: float) -> int:
+    """Stirrups on one beam, by the guide zoned schedule.
+
+    0.50 m at 50 mm, 0.50 m at 100 mm, 1.00 m at 150 mm, the rest at
+    200 mm, each zone counting its spacings plus one. On the guide worked
+    5 m beam this is 11 + 6 + 8 + 16 = 41.
+
+    Zones are laid once over the beam rather than once per end, which is
+    what the guide computes. A beam shorter than the zones gets only the
+    zones that fit.
+    """
+    if length_m <= 0:
+        return 0
+
+    count = 0
+    remaining = length_m
+    for zone_m, spacing_m in BEAM_STIRRUP_ZONES:
+        if remaining <= 0:
+            break
+        span = min(zone_m, remaining)
+        count += math.ceil(span / spacing_m) + 1
+        remaining -= span
+    if remaining > 0:
+        count += math.ceil(remaining / BEAM_STIRRUP_REST_SPACING_M) + 1
+    return count
+
+
+def _beam_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
+    """Guide: 4 x 16mm mains (2 top, 2 bottom) and zoned 10mm stirrups."""
+    lines: list[BomLine] = []
+    length_m = el.length_m
+
+    lines += _bar_lines(
+        MAIN_BAR_ITEM,
+        el.count * BEAM_MAIN_BARS * length_m,
+        "structural.beam_bars",
+        f"{BEAM_MAIN_BARS} main bars x {length_m:.2f} m (2 top, 2 bottom)",
+        params,
+    )
+
+    # A beam is drawn width x depth; height_m carries the depth here.
+    loop_m = _tie_loop_m(el.width_m, el.height_m, CONCRETE_COVER_M["beam"])
+    stirrups = beam_stirrup_count(length_m)
+    if loop_m > 0 and stirrups > 0:
+        lines += _bar_lines(
+            TIE_BAR_ITEM,
+            el.count * stirrups * loop_m,
+            "structural.beam_stirrups",
+            (
+                f"{stirrups} stirrups over {length_m:.2f} m "
+                f"(50/100/150 mm zones then {BEAM_STIRRUP_REST_SPACING_M:g} m) "
+                f"x {loop_m:.2f} m per loop"
             ),
             params,
         )
@@ -249,36 +305,36 @@ def _column_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine
 
 
 def _footing_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
+    """Guide: 6 + 6 16mm bars, cut to the footing side less cover both ends."""
     cover = CONCRETE_COVER_M["footing"]
-    clear_w = el.width_m - 2 * cover
-    clear_l = el.length_m - 2 * cover
-    per_footing = _mat_length_m(clear_w, clear_l, params.footing_bar_spacing_m)
+    cut_w = el.width_m - 2 * cover
+    cut_l = el.length_m - 2 * cover
+    if cut_w <= 0 or cut_l <= 0:
+        return []
+
+    per_footing = FOOTING_BARS_EACH_WAY * (cut_w + cut_l)
     return _bar_lines(
-        params.footing_bar_item_id,
+        MAIN_BAR_ITEM,
         el.count * per_footing,
         "structural.footing_bars",
         (
-            f"{el.count} footings x a mat at {params.footing_bar_spacing_m:g} m o.c. "
-            f"each way over {clear_w:.2f} x {clear_l:.2f} m clear "
-            f"({per_footing:.2f} m each)"
+            f"{el.count} footings x {FOOTING_BARS_EACH_WAY} bars each way, "
+            f"cut {cut_w:.2f} m and {cut_l:.2f} m "
+            f"({el.width_m:g} m square less {cover:g} m cover) = "
+            f"{per_footing:.2f} m each"
         ),
         params,
     )
 
 
 def _slab_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
-    cover = CONCRETE_COVER_M["slab"]
-    clear_w = el.width_m - 2 * cover
-    clear_l = el.length_m - 2 * cover
-    mesh_m = el.count * _mat_length_m(clear_w, clear_l, params.slab_mesh_spacing_m)
+    """Guide: a flat rate per m2 of slab rather than a bar spacing."""
+    area_m2 = el.count * el.width_m * el.length_m
     return _bar_lines(
-        params.slab_mesh_item_id,
-        mesh_m,
+        TIE_BAR_ITEM,
+        area_m2 * SLAB_MESH_M_PER_M2,
         "structural.slab_mesh",
-        (
-            f"mesh at {params.slab_mesh_spacing_m:g} m o.c. each way over "
-            f"{clear_w:.2f} x {clear_l:.2f} m clear"
-        ),
+        f"{area_m2:.2f} m^2 of slab x {SLAB_MESH_M_PER_M2:g} m/m^2 mesh",
         params,
     )
 
@@ -286,6 +342,7 @@ def _slab_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
 _STEEL_BY_KIND = {
     "column": _column_steel,
     "footing": _footing_steel,
+    "beam": _beam_steel,
     "slab": _slab_steel,
 }
 
@@ -295,7 +352,7 @@ def _frame_reinforcement(plan: PlanSchema, params: EstimatingParams) -> list[Bom
 
     Only elements that describe their members are reinforced. A volume with
     no geometry - a hand-entered pour, say - is priced as concrete and left
-    bare rather than reinforced on a guess. Beams have no rule yet.
+    bare rather than reinforced on a guess.
     """
     lines: list[BomLine] = []
     for element in plan.concrete:

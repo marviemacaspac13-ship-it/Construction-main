@@ -21,7 +21,14 @@ that exists.
 import math
 from dataclasses import dataclass, field
 
-from app.takeoff.constants import FRAME_MIX_CLASS, SLAB_MIX_CLASS
+from app.takeoff.constants import (
+    BEAM_SECTION_M,
+    COLUMN_SECTION_M,
+    COLUMN_STANDARD_HEIGHT_M,
+    FOOTING_SIDE_M,
+    FRAME_MIX_CLASS,
+    SLAB_MIX_CLASS,
+)
 from app.takeoff.params import EstimatingParams
 from app.takeoff.schema import ConcreteElement
 
@@ -35,11 +42,18 @@ class FrameDerivation:
     footing_volume_m3: float
     slab_area_m2: float
     slab_volume_m3: float
+    beam_length_m: float = 0.0
+    beam_volume_m3: float = 0.0
     elements: list[ConcreteElement] = field(default_factory=list)
 
     @property
     def total_volume_m3(self) -> float:
-        return self.column_volume_m3 + self.footing_volume_m3 + self.slab_volume_m3
+        return (
+            self.column_volume_m3
+            + self.footing_volume_m3
+            + self.slab_volume_m3
+            + self.beam_volume_m3
+        )
 
 
 def column_count(envelope_w_m: float, envelope_l_m: float, spacing_m: float) -> int:
@@ -74,27 +88,27 @@ def derive_frame(
         return None
 
     count = column_count(envelope_w_m, envelope_l_m, params.column_spacing_m)
+    perimeter_m = 2.0 * (envelope_w_m + envelope_l_m)
 
-    # A column runs from its footing to the tie beam, which is close enough
-    # to the wall height to use it rather than invent another knob.
-    section_m2 = params.column_width_m * params.column_depth_m
-    columns_m3 = count * section_m2 * params.default_wall_height_m
+    # Sections and the column height are the guide standard, not knobs.
+    col_w, col_d = COLUMN_SECTION_M
+    columns_m3 = count * col_w * col_d * COLUMN_STANDARD_HEIGHT_M
 
-    # One isolated footing under each column.
-    footings_m3 = (
-        count
-        * params.footing_width_m
-        * params.footing_length_m
-        * params.footing_thickness_m
-    )
+    # One square footing under each column, sized by the guide bar schedule.
+    # Its thickness is the one dimension the guide never gives.
+    footings_m3 = count * FOOTING_SIDE_M * FOOTING_SIDE_M * params.footing_thickness_m
 
     # Slab on grade over the whole footprint. The envelope is a bounding
     # rectangle, so an L-shaped building takes more slab here than it pours.
     slab_area_m2 = envelope_w_m * envelope_l_m
     slab_m3 = slab_area_m2 * params.slab_thickness_m
 
-    # Each element carries the size of one member and how many there are,
-    # not just the total volume - steel cannot be derived from volume alone.
+    # A tie beam round the perimeter. The guide specifies beams in full but
+    # not where they run, so this is the assumption, not the section.
+    beam_w, beam_d = BEAM_SECTION_M
+    beam_length_m = perimeter_m if params.include_perimeter_beam else 0.0
+    beams_m3 = beam_length_m * beam_w * beam_d
+
     elements: list[ConcreteElement] = []
     if footings_m3 > 0:
         elements.append(
@@ -104,8 +118,8 @@ def derive_frame(
                 volume_m3=footings_m3,
                 mix_class=FRAME_MIX_CLASS,
                 count=count,
-                width_m=params.footing_width_m,
-                length_m=params.footing_length_m,
+                width_m=FOOTING_SIDE_M,
+                length_m=FOOTING_SIDE_M,
                 height_m=params.footing_thickness_m,
             )
         )
@@ -117,9 +131,22 @@ def derive_frame(
                 volume_m3=columns_m3,
                 mix_class=FRAME_MIX_CLASS,
                 count=count,
-                width_m=params.column_width_m,
-                length_m=params.column_depth_m,
-                height_m=params.default_wall_height_m,
+                width_m=col_w,
+                length_m=col_d,
+                height_m=COLUMN_STANDARD_HEIGHT_M,
+            )
+        )
+    if beams_m3 > 0:
+        elements.append(
+            ConcreteElement(
+                id="perimeter_beam",
+                kind="beam",
+                volume_m3=beams_m3,
+                mix_class=FRAME_MIX_CLASS,
+                count=1,
+                width_m=beam_w,
+                length_m=beam_length_m,
+                height_m=beam_d,
             )
         )
     if slab_m3 > 0:
@@ -142,5 +169,7 @@ def derive_frame(
         footing_volume_m3=footings_m3,
         slab_area_m2=slab_area_m2,
         slab_volume_m3=slab_m3,
+        beam_length_m=beam_length_m,
+        beam_volume_m3=beams_m3,
         elements=elements,
     )

@@ -1,9 +1,10 @@
-"""The structural frame is assumed, so the tests pin the assumptions.
+"""Where the frame sits, which is the part the guide does not state.
 
-There is no ground truth to check against here - no sample plan states its
-column schedule. What can be checked is that the derivation is internally
-consistent, that the knobs actually move the concrete, and that an assumed
-frame never passes itself off as a measured one.
+Sections, bar sizes and the tie count come from Guide.docx and are pinned
+in test_guide_bills.py. What is still inferred is the LAYOUT - how many
+columns, how they are spaced, the footing thickness, whether a perimeter
+beam exists - and that is what this file covers, along with the frame
+never passing itself off as measured.
 """
 
 import json
@@ -13,6 +14,11 @@ import pytest
 
 from app.extract.to_plan import extract_plan, to_plan_schema
 from app.takeoff.estimator import estimate_plan
+from app.takeoff.constants import (
+    COLUMN_SECTION_M,
+    COLUMN_STANDARD_HEIGHT_M,
+    FOOTING_SIDE_M,
+)
 from app.takeoff.frame import column_count, derive_frame
 from app.takeoff.params import EstimatingParams
 from tests.fixtures.sample_plans import ALL_PLANS, CAD_WIDE, KERALA
@@ -50,35 +56,44 @@ def test_no_envelope_means_no_columns():
 
 # --- volumes ------------------------------------------------------------
 
-def test_volumes_follow_the_stated_sections():
+def test_volumes_follow_the_guide_sections():
     frame = derive_frame(14.0, 11.0, DEFAULTS)
     assert frame.column_count == 15
-    # 15 columns x 0.20 x 0.20 x 3.0 m wall height
-    assert frame.column_volume_m3 == pytest.approx(1.80)
-    # 15 footings x 0.80 x 0.80 x 0.20
-    assert frame.footing_volume_m3 == pytest.approx(1.92)
+    # 15 columns x 0.20 x 0.40 x 2.7432 m
+    assert frame.column_volume_m3 == pytest.approx(3.29184)
+    # 15 footings x 1.15 x 1.15 x 0.20
+    assert frame.footing_volume_m3 == pytest.approx(3.9675)
+    # 50 m of perimeter tie beam x 0.20 x 0.40
+    assert frame.beam_length_m == pytest.approx(50.0)
+    assert frame.beam_volume_m3 == pytest.approx(4.0)
     # 14 x 11 x 0.10 slab on grade
     assert frame.slab_volume_m3 == pytest.approx(15.40)
-    assert frame.total_volume_m3 == pytest.approx(19.12)
+    assert frame.total_volume_m3 == pytest.approx(26.65934)
 
 
-def test_concrete_scales_with_the_square_of_the_column_section():
-    """The reason the section is worth flagging: 0.30 is 2.25x the 0.20."""
-    thin = derive_frame(14.0, 11.0, DEFAULTS)
-    thick = derive_frame(
-        14.0, 11.0, EstimatingParams(column_width_m=0.30, column_depth_m=0.30)
+def test_the_section_is_the_guide_section_not_a_parameter():
+    """It used to be a knob defaulting to 0.20 x 0.20. The guide settled it."""
+    frame = derive_frame(14.0, 11.0, DEFAULTS)
+    per_column = frame.column_volume_m3 / frame.column_count
+    assert per_column == pytest.approx(
+        COLUMN_SECTION_M[0] * COLUMN_SECTION_M[1] * COLUMN_STANDARD_HEIGHT_M
     )
-    assert thick.column_volume_m3 == pytest.approx(thin.column_volume_m3 * 2.25)
+    assert not hasattr(DEFAULTS, "column_width_m")
+
+
+def test_the_perimeter_beam_can_be_switched_off():
+    """The guide specifies beams but not where they run, so this is a knob."""
+    without = derive_frame(14.0, 11.0, EstimatingParams(include_perimeter_beam=False))
+    assert without.beam_volume_m3 == 0
+    assert "beam" not in {e.kind for e in without.elements}
 
 
 def test_elements_carry_their_mix_class():
     frame = derive_frame(14.0, 11.0, DEFAULTS)
     by_kind = {e.kind: e for e in frame.elements}
-    assert set(by_kind) == {"footing", "column", "slab"}
-    # Footings and columns carry load; a slab on grade does not.
-    assert by_kind["footing"].mix_class == "A"
-    assert by_kind["column"].mix_class == "A"
-    assert by_kind["slab"].mix_class == "B"
+    assert set(by_kind) == {"footing", "column", "beam", "slab"}
+    # The guide pours everything at 1:2:4, slab included.
+    assert {e.mix_class for e in frame.elements} == {"A"}
 
 
 def test_element_volumes_sum_to_the_derivation():
@@ -91,7 +106,7 @@ def test_element_volumes_sum_to_the_derivation():
 def test_a_zero_slab_drops_the_element_rather_than_pouring_nothing():
     frame = derive_frame(14.0, 11.0, EstimatingParams(slab_thickness_m=0))
     assert frame.slab_volume_m3 == 0
-    assert {e.kind for e in frame.elements} == {"footing", "column"}
+    assert {e.kind for e in frame.elements} == {"footing", "column", "beam"}
 
 
 # --- switched off / absent ---------------------------------------------
@@ -114,7 +129,7 @@ def test_every_sample_plan_derives_a_frame(sample):
 
 def test_the_frame_reaches_the_plan_schema():
     schema = to_plan_schema(plan_of(CAD_WIDE))
-    assert {e.kind for e in schema.concrete} == {"footing", "column", "slab"}
+    assert {e.kind for e in schema.concrete} == {"footing", "column", "beam", "slab"}
 
 
 def test_an_assumed_frame_says_so():
@@ -128,19 +143,22 @@ def test_switching_the_frame_off_removes_both_concrete_and_its_warning():
     assert not any("Concrete is assumed" in w for w in extraction.warnings())
 
 
-def test_the_sections_used_are_stated_on_every_estimate():
-    line = [
-        a for a in DEFAULTS.assumption_lines() if "Structural frame assumed" in a
-    ]
+def test_the_guide_sections_are_stated_on_every_estimate():
+    line = [a for a in DEFAULTS.assumption_lines() if "follow the project guide" in a]
     assert len(line) == 1
-    assert "0.2 x 0.2 m columns at 3.5 m o.c." in line[0]
-    assert "0.1 m slab on grade" in line[0]
+    assert "0.2 x 0.4 m columns" in line[0]
+    assert f"{FOOTING_SIDE_M:g} m square footings" in line[0]
+
+
+def test_the_layout_is_stated_separately_as_still_assumed():
+    """The sections are specified; where they sit is not. Do not blur them."""
+    line = [a for a in DEFAULTS.assumption_lines() if "still assumed" in a]
+    assert len(line) == 1
+    assert "3.5 m o.c." in line[0]
 
 
 def test_no_frame_states_no_frame_assumption():
-    assert not any(
-        "Structural frame" in a for a in NO_FRAME.assumption_lines()
-    )
+    assert not any("project guide" in a for a in NO_FRAME.assumption_lines())
 
 
 # --- pricing ------------------------------------------------------------

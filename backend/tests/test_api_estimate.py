@@ -125,18 +125,19 @@ def test_real_plan_image_prices_end_to_end():
 
     # Concrete is derived from the envelope, never read, and says so.
     assert ex["column_count"] == 15
-    assert ex["concrete_volume_m3"] == pytest.approx(19.12)
+    assert ex["concrete_volume_m3"] == pytest.approx(26.66, abs=0.01)
     assert any("Concrete is assumed, not read" in w for w in ex["warnings"])
 
     est = body["estimate"]
-    assert est["grand_total"] == pytest.approx(257262.70)
+    assert est["grand_total"] == pytest.approx(308356.26, abs=0.01)
     assert est["unpriced"] == []
     assert {li["item_id"] for li in est["line_items"]} >= {
         "CHB01", "CHB02", "CMT01", "SND02", "DB01", "GI01",
         "GVF01",  # gravel reaches an estimate only through concrete
+        "DB03",   # 16mm is the guide main bar for columns, beams and footings
     }
-    assert any("Structural frame assumed" in a for a in est["assumptions"])
-    assert any("Frame steel assumed" in a for a in est["assumptions"])
+    assert any("follow the project guide" in a for a in est["assumptions"])
+    assert any("still assumed" in a for a in est["assumptions"])
     # Slab mesh and CHB wall bars are both DB01 and must be one purchase.
     assert len([li for li in est["line_items"] if li["item_id"] == "DB01"]) == 1
 
