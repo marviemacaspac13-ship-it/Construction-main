@@ -229,7 +229,7 @@ def _read_plumbing(raw_bytes: bytes, plan_type: str):
     if image is None:
         raise HTTPException(400, "Could not decode image - corrupt or unsupported format.")
 
-    counts = tally(count_tags(read_tiled(image), FIXTURE_TAG_PATTERNS))
+    counts = tally(count_tags(read_tiled(image), FIXTURE_TAG_PATTERNS, image.shape))
 
     # A cleanout implies no materials, so a plan where only cleanouts were
     # read has produced nothing to price. Returning a cheerful zero there

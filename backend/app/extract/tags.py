@@ -74,15 +74,86 @@ def read_tiled(
     return merge_boxes(read_array(image), found)
 
 
-def count_tags(boxes: list[TextBox], patterns: dict[str, str]) -> dict[str, TagCount]:
+# A legend row sits its expansion just to the right of the tag, on the same
+# line. Both windows are fractions of the image rather than pixel counts:
+# a flat number is right at one scale and wrong at every other, which is
+# the mistake the chain tolerances made before Task 20.
+LEGEND_MAX_DX_FRAC = 0.15
+LEGEND_ROW_TOL_FRAC = 0.015
+
+# ...and a MINIMUM gap, because the two OCR passes read the same glyph
+# slightly differently - 'WC' and "wC'" land at the same coordinates, 'FD'
+# and 'FQ*' one pixel apart. merge_boxes keeps both, the strings differing,
+# and without this floor the longer misread looks like an expansion of the
+# shorter one. That cost three real fixtures on the sample sanitary plan,
+# which is a worse bug than the legend it was meant to fix. On the sample
+# legend the real gap is 7.4% of the width, so 2% clears the duplicates
+# with room to spare.
+LEGEND_MIN_DX_FRAC = 0.02
+
+
+def _is_legend_row(
+    tag_box: TextBox,
+    boxes: list[TextBox],
+    min_dx: float,
+    max_dx: float,
+    row_tol: float,
+) -> bool:
+    """True when this tag is a legend entry rather than a fixture on the plan.
+
+    A legend reads `LAV  LAVATORY`: the tag, then its expansion immediately
+    to the right on the same line, and the expansion begins with the same
+    letter. That last part is what makes this safe - on the sample legend
+    all nine rows match it, while a fixture label that happens to sit near
+    other text almost never will.
+
+    Counting a legend costs a phantom fixture per row, and on a plan whose
+    fixtures are too faint to read but whose legend is crisp, EVERY count
+    would come from the legend.
+    """
+    tag_text = normalise_tag(tag_box.text)
+    if not tag_text:
+        return False
+
+    for other in boxes:
+        if other is tag_box:
+            continue
+        text = other.text.strip()
+        if len(text) <= len(tag_text):
+            continue
+        if abs(other.cy - tag_box.cy) > row_tol:
+            continue
+        if not min_dx <= other.cx - tag_box.cx <= max_dx:
+            continue
+        if text[:1].upper() == tag_text[:1].upper():
+            return True
+    return False
+
+
+def count_tags(
+    boxes: list[TextBox],
+    patterns: dict[str, str],
+    image_shape: tuple[int, ...] | None = None,
+) -> dict[str, TagCount]:
     """Count boxes whose text matches each named pattern.
 
     `patterns` maps a tag name to a regex matched against the normalised
     box text. Every tag asked for comes back, at zero if unseen - a caller
     needs to tell "none on this plan" apart from "not looked for".
+
+    Pass `image_shape` to suppress legend rows. Without it the windows have
+    no scale to be relative to, so legend suppression is skipped rather
+    than guessed at, and a plan carrying a legend will over-count.
     """
     compiled = {tag: re.compile(p, re.I) for tag, p in patterns.items()}
     hits: dict[str, list[TextBox]] = {tag: [] for tag in patterns}
+
+    min_dx = max_dx = row_tol = 0.0
+    if image_shape is not None:
+        height, width = image_shape[0], image_shape[1]
+        min_dx = width * LEGEND_MIN_DX_FRAC
+        max_dx = width * LEGEND_MAX_DX_FRAC
+        row_tol = height * LEGEND_ROW_TOL_FRAC
 
     for box in boxes:
         text = normalise_tag(box.text)
@@ -90,6 +161,8 @@ def count_tags(boxes: list[TextBox], patterns: dict[str, str]) -> dict[str, TagC
             continue
         for tag, pattern in compiled.items():
             if pattern.fullmatch(text):
+                if max_dx and _is_legend_row(box, boxes, min_dx, max_dx, row_tol):
+                    break
                 hits[tag].append(box)
                 break  # a tag belongs to one kind
 

@@ -138,3 +138,72 @@ def test_deduplication_is_what_makes_it_a_count():
             )
     undeduped = tally(count_tags(raw, PLUMBING_TAGS))
     assert undeduped["lavatory"] > merged["lavatory"]
+
+
+# --- a legend is not a set of fixtures ----------------------------------
+
+SHAPE = (650, 1356, 3)  # the sample water-line layout that carries a legend
+
+
+def test_a_legend_row_is_not_counted():
+    """`LAV  LAVATORY` in a legend table is a definition, not a lavatory.
+
+    Left uncaught this costs a phantom fixture per row, and on a plan whose
+    fixtures are too faint to read but whose legend is crisp, every count
+    would come from the legend.
+    """
+    boxes = [box("LAV", 1161, 87), box("LAVATORY", 1260, 85)]
+    assert tally(count_tags(boxes, PLUMBING_TAGS, SHAPE)) == {}
+
+
+def test_the_same_tag_on_the_drawing_still_counts():
+    boxes = [box("LAV", 1161, 87), box("LAVATORY", 1260, 85), box("LAV", 300, 400)]
+    assert tally(count_tags(boxes, PLUMBING_TAGS, SHAPE)) == {"lavatory": 1}
+
+
+def test_an_expansion_must_start_with_the_same_letter():
+    """What keeps this from eating fixtures that merely sit near text."""
+    boxes = [box("WC", 100, 100), box("KITCHEN", 190, 100)]
+    assert tally(count_tags(boxes, PLUMBING_TAGS, SHAPE)) == {"water_closet": 1}
+
+
+def test_a_duplicate_read_of_the_same_glyph_is_not_an_expansion():
+    """The two OCR passes disagree on one mark: 'WC' and "wC'" at one spot.
+
+    Both survive dedupe because the strings differ. Without a minimum gap
+    the longer misread looks like an expansion and suppresses the real
+    fixture - which cost three of them on the sample sanitary plan.
+    """
+    boxes = [box("WC", 168, 505), box("wC'", 168, 505)]
+    assert tally(count_tags(boxes, PLUMBING_TAGS, SHAPE))["water_closet"] >= 1
+
+
+def test_an_expansion_far_across_the_sheet_is_not_a_legend_row():
+    boxes = [box("FD", 100, 100), box("FLOOR DRAIN", 1300, 100)]
+    assert tally(count_tags(boxes, PLUMBING_TAGS, SHAPE)) == {"floor_drain": 1}
+
+
+def test_an_expansion_on_another_line_is_not_a_legend_row():
+    boxes = [box("FD", 100, 100), box("FLOOR DRAIN", 190, 400)]
+    assert tally(count_tags(boxes, PLUMBING_TAGS, SHAPE)) == {"floor_drain": 1}
+
+
+def test_without_an_image_shape_no_legend_suppression_is_attempted():
+    """The windows are fractions of the image; with no scale, do not guess."""
+    boxes = [box("LAV", 1161, 87), box("LAVATORY", 1260, 85)]
+    assert tally(count_tags(boxes, PLUMBING_TAGS)) == {"lavatory": 1}
+
+
+@pytest.mark.ocr
+@pytest.mark.skipif(
+    not (PLANS / "Data Set" / "Plumbingplan" / "IMAGE" / "01.png").exists(),
+    reason="data set not present",
+)
+def test_the_real_legend_plan_counts_only_its_one_fixture():
+    """GROUND FLOOR WATER LINE LAYOUT: a 14-row legend, one WC on the plan."""
+    image = cv2.imread(str(PLANS / "Data Set" / "Plumbingplan" / "IMAGE" / "01.png"))
+    boxes = read_tiled(image)
+    assert tally(count_tags(boxes, PLUMBING_TAGS)) != tally(
+        count_tags(boxes, PLUMBING_TAGS, image.shape)
+    ), "the legend should have been suppressed"
+    assert tally(count_tags(boxes, PLUMBING_TAGS, image.shape)) == {"water_closet": 1}
