@@ -81,15 +81,35 @@ def test_non_image_upload_is_rejected():
     assert res.status_code == 400
 
 
-def test_electrical_plan_is_refused_rather_than_guessed():
-    """The reader only understands floor plans; it must say so, not invent."""
-    res = client.post(
-        "/api/estimate/image",
-        files={"file": ("plan.png", b"x", "image/png")},
-        data={"plan_type": "Electrical Plan"},
-    )
+def test_electrical_plan_is_refused_when_the_library_is_empty():
+    """With no references nothing can match, and a zero-peso 200 would lie.
+
+    The library is populated now, so this has to empty it explicitly - it
+    used to pass by accident because no crops existed anywhere.
+    """
+    with patch("app.templates_store.list_templates", return_value={}):
+        res = client.post(
+            "/api/estimate/image",
+            files={"file": ("plan.png", b"x", "image/png")},
+            data={"plan_type": "Electrical Plan"},
+        )
     assert res.status_code == 422
     assert "Symbol Library" in res.json()["detail"]
+
+
+def test_an_electrical_plan_prices_once_references_exist():
+    """The counterpart: the same route succeeds against the real library."""
+    with open(PLANS / "05.png", "rb") as fh:
+        res = client.post(
+            "/api/estimate/image",
+            files={"file": ("05.png", fh.read(), "image/png")},
+            data={"plan_type": "Electrical Plan"},
+        )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    # Nothing was READ on this path, so there is nothing to report on.
+    assert body["extraction"] is None
+    assert body["estimate"]["grand_total"] > 0
 
 
 def test_undecodable_image_is_rejected():

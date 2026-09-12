@@ -18,9 +18,12 @@ __pycache__/
 .pytest_cache/
 
 # Runtime data
-backend/templates/
 backend/runs/
 *.pt
+
+# backend/templates/ is deliberately TRACKED. The symbol crops are project
+# data, not scratch: without them every electrical and plumbing scan returns
+# 422, so a fresh clone should come with a working detector.
 
 # OS
 Thumbs.db

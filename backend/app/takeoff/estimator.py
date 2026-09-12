@@ -42,6 +42,25 @@ class EstimateResponse(BaseModel):
     assumptions: list[str]
 
 
+def _source_assumptions(source: str) -> list[str]:
+    """Caveats that belong to how the plan was read, not to the parameters.
+
+    Symbol matching identifies a symbol FAMILY, never a catalog variant: a
+    drawing puts the same circle on a 1-gang and a 3-gang outlet, and the
+    same ring on every size of ceiling receptacle. Which SKU a match becomes
+    is decided by the folder a reference crop was filed under in the Symbol
+    Library, so the variant is a librarian's choice and has to say so - an
+    OT01 line otherwise reads as though the plan specified 1-gang.
+    """
+    if source != "detection":
+        return []
+    return [
+        "Counts come from symbol matching. The drawing distinguishes symbol "
+        "families, not catalog variants, so which variant each count is "
+        "priced as follows the Symbol Library mapping rather than the plan.",
+    ]
+
+
 def _round_quantity(item_id: str, quantity: float) -> float:
     """Discrete SKUs round up; continuous SKUs keep 2 dp."""
     spec = UNIT_SPECS.get(item_id)
@@ -55,6 +74,7 @@ def estimate_from_bom(
     catalog: dict[str, dict],
     plan_type: str,
     params: EstimatingParams,
+    source: str = "manual",
 ) -> EstimateResponse:
     priced: list[PricedLine] = []
     unpriced: list[BomLine] = []
@@ -94,7 +114,7 @@ def estimate_from_bom(
         line_items=priced,
         unpriced=unpriced,
         grand_total=round(grand_total, 2),
-        assumptions=params.assumption_lines(),
+        assumptions=params.assumption_lines() + _source_assumptions(source),
     )
 
 
@@ -106,4 +126,4 @@ def estimate_plan(
     """Full path: PlanSchema -> rules -> BOM -> priced estimate."""
     params = params or EstimatingParams()
     bom = rules_for(plan.plan_type)(plan, params)
-    return estimate_from_bom(bom, catalog, plan.plan_type, params)
+    return estimate_from_bom(bom, catalog, plan.plan_type, params, plan.source)
