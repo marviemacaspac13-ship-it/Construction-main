@@ -176,6 +176,30 @@ def _read_plan(raw_bytes: bytes, plan_type: str):
     return to_plan_schema(extraction, plan_type), report_from_extraction(extraction)
 
 
+# A plan type can only be matched by references from its own trade. Asking
+# whether ANY template exists is not enough: once the electrical crops were
+# installed, a plumbing plan sailed past the guard and returned a cheerful
+# 200 with a zero-peso estimate - which is precisely the "successful scan of
+# a plan with no materials on it" the guard was added to prevent.
+PLAN_TYPE_CATEGORY: dict[str, str] = {
+    "Electrical Plan": "electrical",
+    "Plumbing Plan": "plumbing",
+}
+
+
+def _templates_for(plan_type: str) -> dict[str, list[str]]:
+    """Installed references whose SKU belongs to this plan type's trade."""
+    category = PLAN_TYPE_CATEGORY.get(plan_type)
+    if category is None:
+        return {}
+    catalog = load_catalog()
+    return {
+        item_id: files
+        for item_id, files in templates_store.list_templates().items()
+        if (catalog.get(item_id) or {}).get("category") == category
+    }
+
+
 def _detect_plan(raw_bytes: bytes, plan_type: str):
     """Electrical and plumbing: count symbols against uploaded references.
 
@@ -183,12 +207,13 @@ def _detect_plan(raw_bytes: bytes, plan_type: str):
     would look like a successful scan of a plan with no materials on it.
     Zero matches AFTER references exist is a real outcome and returns 200.
     """
-    if not templates_store.list_templates():
+    relevant = _templates_for(plan_type)
+    if not relevant:
         raise HTTPException(
             422,
-            f"No symbol references have been uploaded, so nothing on this "
-            f"{plan_type} can be matched. Add a reference image for each catalog "
-            f"item in the Symbol Library, then scan again.",
+            f"No symbol references have been uploaded for a {plan_type}, so "
+            f"nothing on it can be matched. Add a reference image for each "
+            f"catalog item in the Symbol Library, then scan again.",
         )
 
     try:

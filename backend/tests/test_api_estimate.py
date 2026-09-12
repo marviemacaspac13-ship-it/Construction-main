@@ -97,6 +97,25 @@ def test_electrical_plan_is_refused_when_the_library_is_empty():
     assert "Symbol Library" in res.json()["detail"]
 
 
+def test_a_plumbing_plan_is_refused_while_only_electrical_crops_exist():
+    """The guard is per-trade, and has to be.
+
+    Asking whether ANY template exists is not enough: once the electrical
+    crops were installed a plumbing plan sailed past and returned a
+    cheerful 200 with a zero-peso estimate, which is exactly the
+    "successful scan of a plan with no materials on it" the guard exists
+    to prevent.
+    """
+    with open(PLANS / "07.png", "rb") as fh:
+        res = client.post(
+            "/api/estimate/image",
+            files={"file": ("07.png", fh.read(), "image/png")},
+            data={"plan_type": "Plumbing Plan"},
+        )
+    assert res.status_code == 422
+    assert "Plumbing Plan" in res.json()["detail"]
+
+
 def test_an_electrical_plan_prices_once_references_exist():
     """The counterpart: the same route succeeds against the real library."""
     with open(PLANS / "05.png", "rb") as fh:

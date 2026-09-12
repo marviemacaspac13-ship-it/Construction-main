@@ -33,8 +33,11 @@ orientation needs its own reference. Four would probably be better than two.
 
 - **Switches.** On `05.png` they are lettered `S`, `S2`, `S3`, `S3w` — text, not a glyph.
   There is nothing to crop, so they need tag counting rather than template matching.
-- **`UTB01` and `JCB01`.** The rules derive a utility box per wiring device and a junction
-  box per ceiling outlet. A template for either would double-count.
+- **`UTB01` and `JCB01`.** Both *do* have standard symbols — a plain square and a square
+  with a diagonal cross — but `05.png` does not draw them, and the rules derive one utility
+  box per wiring device and one junction box per ceiling outlet. A template would double-count
+  **on a plan like this one**. If a drawing ever does show them, the derivation is the thing
+  that has to give way, not the template.
 - **Anything without a `UnitSpec`** in `app/takeoff/units.py`. `from_detections.py` filters
   those labels out, so the crop would be matched and then silently dropped.
 
