@@ -11,7 +11,7 @@ from app.vision.template_match import match_templates
 from app.pricing import price_takeoff
 from app.schemas import ScanResponse
 from app.materials import load_catalog
-from app import templates_store
+from app import audit, templates_store
 
 from pydantic import BaseModel
 
@@ -148,10 +148,12 @@ async def estimate_image(
     else:
         plan, report = _detect_plan(raw_bytes, plan_type)
 
-    return ImageEstimateResponse(
-        extraction=report,
-        estimate=estimate_plan(plan, load_catalog()),
-    )
+    estimate = estimate_plan(plan, load_catalog())
+    # Assumptions are deliberately not surfaced in the UI, so the only place
+    # they survive is the ledger. See app/audit.py.
+    audit.record_estimate(plan_type, estimate, report)
+
+    return ImageEstimateResponse(extraction=report, estimate=estimate)
 
 
 def _read_plan(raw_bytes: bytes, plan_type: str):
