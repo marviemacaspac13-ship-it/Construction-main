@@ -42,6 +42,23 @@ class EstimateResponse(BaseModel):
     assumptions: list[str]
 
 
+def _families_in(bom: list[BomLine]) -> set[str]:
+    """Rule families that actually produced a line.
+
+    A rule is named "<family>.<what>", and merge_bom joins several with a
+    "+" when they buy the same SKU, so both separators have to be handled.
+    Deriving the families from the BOM rather than from the plan type means
+    a new rule brings its own assumption along with it.
+    """
+    families: set[str] = set()
+    for line in bom:
+        for rule in line.rule.split("+"):
+            family, _, _ = rule.partition(".")
+            if family:
+                families.add(family)
+    return families
+
+
 def _source_assumptions(source: str) -> list[str]:
     """Caveats that belong to how the plan was read, not to the parameters.
 
@@ -114,7 +131,9 @@ def estimate_from_bom(
         line_items=priced,
         unpriced=unpriced,
         grand_total=round(grand_total, 2),
-        assumptions=params.assumption_lines() + _source_assumptions(source),
+        assumptions=(
+            params.assumption_lines(_families_in(bom)) + _source_assumptions(source)
+        ),
     )
 
 

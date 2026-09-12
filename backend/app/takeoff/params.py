@@ -5,6 +5,8 @@ change per project (wall height, waste allowance, bar spacing). Constants
 are domain facts they should not.
 """
 
+from collections.abc import Collection
+
 from pydantic import BaseModel, Field
 
 from app.takeoff.constants import (
@@ -65,37 +67,86 @@ class EstimatingParams(BaseModel):
     # the assumption.
     include_perimeter_beam: bool = True
 
-    def assumption_lines(self) -> list[str]:
-        """Human-readable assumptions, surfaced on every estimate."""
-        lines = [
-            f"Wall height defaults to {self.default_wall_height_m} m where not specified.",
-            f"Vertical bars at {self.vertical_bar_spacing_m} m o.c., "
-            f"horizontal at {self.horizontal_bar_spacing_m} m o.c. ({self.rebar_item_id}).",
-            f"Waste allowance: CHB {self.chb_waste:.0%}, mortar {self.mortar_waste:.0%}, "
-            f"rebar {self.rebar_waste:.0%}, wire {self.wire_waste:.0%}, pipe {self.pipe_waste:.0%}.",
-            f"{self.slack_per_termination_m} m of conductor slack allowed per termination.",
-            f"Where opening tags cannot be read, {self.doors_per_room:g} door and "
-            f"{self.windows_per_room:g} window are assumed per room.",
+    def tagged_assumptions(self) -> list[tuple[str, str]]:
+        """Every assumption, paired with the rule family it belongs to.
+
+        Tagged rather than filtered by plan type, so a rule brings its own
+        assumption and nothing has to be kept in sync by hand. The waste
+        allowances are split the same way: an electrical estimate has no
+        business declaring a mortar allowance.
+        """
+        lines: list[tuple[str, str]] = [
+            (
+                "structural",
+                f"Wall height defaults to {self.default_wall_height_m} m where not specified.",
+            ),
+            (
+                "structural",
+                f"Vertical bars at {self.vertical_bar_spacing_m} m o.c., "
+                f"horizontal at {self.horizontal_bar_spacing_m} m o.c. ({self.rebar_item_id}).",
+            ),
+            (
+                "structural",
+                f"Waste allowance: CHB {self.chb_waste:.0%}, mortar {self.mortar_waste:.0%}, "
+                f"concrete {self.concrete_waste:.0%}, rebar {self.rebar_waste:.0%}.",
+            ),
+            (
+                "structural",
+                f"Where opening tags cannot be read, {self.doors_per_room:g} door and "
+                f"{self.windows_per_room:g} window are assumed per room.",
+            ),
+            (
+                "electrical",
+                f"Waste allowance: wire {self.wire_waste:.0%}, "
+                f"conduit {self.conduit_waste:.0%}.",
+            ),
+            (
+                "electrical",
+                f"{self.slack_per_termination_m} m of conductor slack allowed per termination.",
+            ),
+            ("plumbing", f"Waste allowance: pipe {self.pipe_waste:.0%}."),
         ]
         if self.include_frame:
             w, d = COLUMN_SECTION_M
-            lines.append(
-                f"Frame sections and steel follow the project guide "
-                f"(rules {RULES_VERSION}): {w:g} x {d:g} m columns "
-                f"{COLUMN_STANDARD_HEIGHT_M:g} m tall with {COLUMN_TIES_PER_COLUMN} ties "
-                f"each, {FOOTING_SIDE_M:g} m square footings with "
-                f"{FOOTING_BARS_EACH_WAY} bars each way, and a "
-                f"{SLAB_MESH_M_PER_M2:g} m/m^2 slab mesh."
-            )
-            lines.append(
-                f"Where the frame SITS is still assumed: columns at "
-                f"{self.column_spacing_m:g} m o.c. round the envelope, "
-                f"{self.footing_thickness_m:g} m footing thickness, a "
-                f"{self.slab_thickness_m:g} m slab on grade"
-                + (", and a perimeter tie beam." if self.include_perimeter_beam else ".")
-            )
-            lines.append(
-                "Lap splices are not counted separately; the rebar waste allowance is "
-                "the only slack."
-            )
+            lines += [
+                (
+                    "structural",
+                    f"Frame sections and steel follow the project guide "
+                    f"(rules {RULES_VERSION}): {w:g} x {d:g} m columns "
+                    f"{COLUMN_STANDARD_HEIGHT_M:g} m tall with {COLUMN_TIES_PER_COLUMN} ties "
+                    f"each, {FOOTING_SIDE_M:g} m square footings with "
+                    f"{FOOTING_BARS_EACH_WAY} bars each way, and a "
+                    f"{SLAB_MESH_M_PER_M2:g} m/m^2 slab mesh.",
+                ),
+                (
+                    "structural",
+                    f"Where the frame SITS is still assumed: columns at "
+                    f"{self.column_spacing_m:g} m o.c. round the envelope, "
+                    f"{self.footing_thickness_m:g} m footing thickness, a "
+                    f"{self.slab_thickness_m:g} m slab on grade"
+                    + (", and a perimeter tie beam." if self.include_perimeter_beam else "."),
+                ),
+                (
+                    "structural",
+                    "Lap splices are not counted separately; the rebar waste allowance is "
+                    "the only slack.",
+                ),
+            ]
         return lines
+
+    def assumption_lines(self, families: Collection[str] | None = None) -> list[str]:
+        """Assumptions that actually applied to an estimate.
+
+        `families` is the set of rule families that fired - "structural",
+        "electrical", "plumbing" - taken from the BOM. Passing None returns
+        everything, which is what a caller with no BOM to hand should do.
+
+        Nothing renders these; they go to the ledger in app/audit.py, which
+        is the only record of what an estimate rests on. A ledger claiming
+        an electrical job assumed a rebar spacing is worse than no ledger.
+        """
+        return [
+            text
+            for family, text in self.tagged_assumptions()
+            if families is None or family in families
+        ]

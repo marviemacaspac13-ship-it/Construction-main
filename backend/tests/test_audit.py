@@ -106,3 +106,53 @@ def test_detection_estimates_record_no_extraction(ledger, estimate):
     """Nothing was read on that path, so there is nothing to report."""
     audit.record_estimate("Electrical Plan", estimate, None)
     assert "extraction" not in read(ledger)[0]
+
+
+# --- assumptions are scoped to the rules that fired ---------------------
+
+def test_an_electrical_estimate_records_no_structural_assumptions(ledger, catalog):
+    """The ledger is the only record of what an estimate rests on.
+
+    One claiming an electrical job assumed a rebar spacing is worse than no
+    ledger at all - it reads as fact to whoever finds it later.
+    """
+    from app.takeoff.from_detections import plan_from_detections
+    from app.schemas import Detection
+
+    dets = [Detection(label="OT01", confidence=0.9, bbox=[0, 0, 8, 8])]
+    est = estimate_plan(plan_from_detections(dets, "Electrical Plan"), catalog)
+    audit.record_estimate("Electrical Plan", est)
+
+    recorded = read(ledger)[0]["assumptions"]
+    assert any("conductor slack" in a for a in recorded)
+    assert not any("rebar" in a.lower() for a in recorded)
+    assert not any("CHB" in a for a in recorded)
+    assert not any("frame" in a.lower() for a in recorded)
+
+
+def test_a_floor_plan_records_no_electrical_assumptions(ledger, estimate):
+    audit.record_estimate("Floor Plan", estimate)
+    recorded = read(ledger)[0]["assumptions"]
+    assert any("project guide" in a for a in recorded)
+    assert not any("conductor slack" in a for a in recorded)
+
+
+def test_assumptions_follow_the_rules_that_fired_not_the_plan_type(catalog):
+    """Derived from the BOM, so a new rule brings its own assumption along."""
+    from app.takeoff.estimator import _families_in
+    from app.takeoff.bom import BomLine
+
+    bom = [
+        BomLine(item_id="X", quantity=1, rule="electrical.device_count", derivation="", inputs={}),
+        BomLine(item_id="Y", quantity=1, rule="structural.concrete+structural.laying_mortar",
+                derivation="", inputs={}),
+    ]
+    assert _families_in(bom) == {"electrical", "structural"}
+
+
+def test_asking_for_everything_still_works():
+    """A caller with no BOM to hand should get the full list."""
+    from app.takeoff.params import EstimatingParams
+
+    params = EstimatingParams()
+    assert len(params.assumption_lines()) > len(params.assumption_lines({"electrical"}))
