@@ -57,12 +57,26 @@ def parse_room(text: str) -> RoomToken | None:
     )
 
 
+# A room is never this much longer than it is wide. The worst in the sample
+# corpus is a toilet at 2.85, so 6.0 leaves room for a long corridor while
+# still rejecting title-block text: "SCALE: 10 : 1 MTS" parses as 10 x 1,
+# because the separator repair turns any punctuation between two digits
+# into the dimension "x".
+MAX_ROOM_ASPECT = 6.0
+
+
+def is_plausible_room(room: RoomToken) -> bool:
+    if room.width <= 0 or room.length <= 0:
+        return False
+    return max(room.width, room.length) / min(room.width, room.length) <= MAX_ROOM_ASPECT
+
+
 def parse_rooms(blocks: list[str]) -> list[RoomToken]:
-    """Parse many room blocks, skipping any that carry no dimensions."""
+    """Parse many room blocks, skipping any that carry no usable dimensions."""
     out = []
     for block in blocks:
         room = parse_room(block)
-        if room is not None:
+        if room is not None and is_plausible_room(room):
             out.append(room)
     return out
 

@@ -14,6 +14,25 @@ Two complications seen in real plans:
 
 from dataclasses import dataclass, field
 
+# Chain slack, as a REAL-WORLD length rather than a bare number.
+#
+# This is the bug that made the whole checksum inert on metre-scale plans.
+# A flat floor of 2.0 is 2 mm on a millimetre drawing - correctly nothing -
+# and two METRES on one dimensioned in metres, where it validates almost
+# any misread and pushes confidence UP while doing it. Both tolerances are
+# therefore physical distances, converted into whatever unit the drawing
+# happens to use.
+ABS_TOL_M = 0.002        # 2 mm of slack on a chain against its stated overall
+CUMULATIVE_TOL_M = 0.001  # 1 mm before a value counts as a running total
+MM_PER_UNIT = 0.001       # assumed scale when the caller has not inferred one
+
+
+def tolerance_in_units(metres: float, metres_per_unit: float) -> float:
+    """A real-world tolerance expressed in the drawing's own units."""
+    if metres_per_unit <= 0:
+        metres_per_unit = MM_PER_UNIT
+    return metres / metres_per_unit
+
 
 @dataclass
 class ChainCheck:
@@ -32,12 +51,18 @@ class ChainCheck:
         return abs(self.error) / abs(self.stated_total)
 
 
-def drop_cumulative(values: list[float], tol: float = 1.0) -> tuple[list[float], list[float]]:
+def drop_cumulative(
+    values: list[float],
+    tol: float | None = None,
+    metres_per_unit: float = MM_PER_UNIT,
+) -> tuple[list[float], list[float]]:
     """Remove running-total annotations from a chain of segments.
 
     A value equal to the sum of everything before it is a cumulative
-    marker, not another segment.
+    marker, not another segment. `tol` overrides the scaled default.
     """
+    if tol is None:
+        tol = tolerance_in_units(CUMULATIVE_TOL_M, metres_per_unit)
     kept: list[float] = []
     dropped: list[float] = []
     running = 0.0
@@ -54,11 +79,22 @@ def validate_chain(
     values: list[float],
     stated_total: float,
     rel_tol: float = 0.005,
-    abs_tol: float = 2.0,
+    abs_tol: float | None = None,
+    metres_per_unit: float = MM_PER_UNIT,
 ) -> ChainCheck:
-    """Check that a chain of segment dimensions sums to its stated overall."""
+    """Check that a chain of segment dimensions sums to its stated overall.
+
+    Pass `metres_per_unit` from the unit inference. Leaving it at the
+    default assumes a millimetre drawing, which is what the tolerance used
+    to hard-code.
+    """
+    if abs_tol is None:
+        abs_tol = tolerance_in_units(ABS_TOL_M, metres_per_unit)
+
     check = ChainCheck(stated_total=stated_total, values=list(values))
-    check.kept, check.dropped_cumulative = drop_cumulative(values)
+    check.kept, check.dropped_cumulative = drop_cumulative(
+        values, metres_per_unit=metres_per_unit
+    )
     check.total = sum(check.kept)
     check.error = check.total - stated_total
     tolerance = max(abs_tol, abs(stated_total) * rel_tol)

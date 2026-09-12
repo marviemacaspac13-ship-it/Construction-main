@@ -21,7 +21,9 @@ from itertools import combinations
 import cv2
 import numpy as np
 
+from app.extract.chains import ABS_TOL_M, MM_PER_UNIT, tolerance_in_units
 from app.extract.ocr import DEDUPE_RADIUS, TextBox, merge_boxes, read_array, read_region
+from app.extract.units_infer import infer_units
 from app.extract.to_plan import PlanExtraction, extract_plan
 from app.extract.tokens import ROOM_DIM_RE, classify_tag
 
@@ -98,14 +100,21 @@ def _cluster_lines(boxes: list[TextBox], axis: str) -> list[list[TextBox]]:
     return lines
 
 
-def _match_chain(chain: list[TextBox], total: float) -> list[float] | None:
+def _match_chain(
+    chain: list[TextBox], total: float, metres_per_unit: float = MM_PER_UNIT
+) -> list[float] | None:
     """Values from chain that sum to total, dropping up to N outliers.
 
     Prefers the cleanest fit, not the first one inside tolerance: a junk
     value small enough to hide under the tolerance would otherwise be kept
     and corrupt the segment list even though the total still checks out.
+
+    The floor is a real distance, so it has to be converted into the
+    drawing units - a flat 2.0 is two metres on a metre-scale plan.
     """
-    tolerance = max(2.0, abs(total) * 0.005)
+    tolerance = max(
+        tolerance_in_units(ABS_TOL_M, metres_per_unit), abs(total) * 0.005
+    )
     values = [b.value for b in chain]
 
     candidates: list[tuple[float, int, list[float]]] = []
@@ -140,7 +149,9 @@ def _overall_above(singles: list[float], chain_sum: float) -> float | None:
     return min(above) if above else None
 
 
-def _resolve_band(name: str, boxes: list[TextBox]) -> Band:
+def _resolve_band(
+    name: str, boxes: list[TextBox], metres_per_unit: float = MM_PER_UNIT
+) -> Band:
     usable = [b for b in boxes if b.score >= MIN_SCORE and (b.value or 0) > 0]
     lines = _cluster_lines(usable, name)
     band = Band(name=name)
@@ -151,7 +162,7 @@ def _resolve_band(name: str, boxes: list[TextBox]) -> Band:
     best: tuple[list[float], float] | None = None
     for chain in chains:
         for total in singles:
-            matched = _match_chain(chain, total)
+            matched = _match_chain(chain, total, metres_per_unit)
             if matched is not None and (best is None or len(matched) > len(best[0])):
                 best = (matched, total)
 
@@ -274,7 +285,21 @@ def extraction_from_boxes(boxes: list[TextBox]) -> PlanExtraction:
         if band is not None:
             banded[band].append(box)
 
-    bands = {name: _resolve_band(name, group) for name, group in banded.items()}
+    # Unit inference normally runs on the envelope, which is not known
+    # until the bands resolve - but the bands need a tolerance, and a
+    # tolerance is meaningless without a scale. The largest number in the
+    # margins is the stated overall or close to it, which is all the
+    # inference needs: it buckets at 3000 and 300, so only an error of
+    # orders of magnitude would pick the wrong unit.
+    magnitudes = [b.value for group in banded.values() for b in group if (b.value or 0) > 0]
+    metres_per_unit = (
+        infer_units(max(magnitudes)).metres_per_unit if magnitudes else 0.0
+    ) or MM_PER_UNIT
+
+    bands = {
+        name: _resolve_band(name, group, metres_per_unit)
+        for name, group in banded.items()
+    }
 
     # An edge with no printed overall can still be checked against the
     # opposite edge, which measures the same span.
@@ -286,6 +311,7 @@ def extraction_from_boxes(boxes: list[TextBox]) -> PlanExtraction:
             matched = _match_chain(
                 [b for b in banded[name] if b.score >= MIN_SCORE and (b.value or 0) > 0],
                 twin.total,
+                metres_per_unit,
             )
             if matched is not None:
                 band.segments, band.total = matched, twin.total

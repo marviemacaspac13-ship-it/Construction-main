@@ -119,7 +119,12 @@ def extract_plan(
     """
     units = infer_units(max(envelope_w, envelope_l))
 
-    checks = [validate_chain(values, total) for values, total in (chains or [])]
+    # The chain tolerance is a real distance, so it has to know the scale.
+    # Without this a metre-scale plan validates a 1.78 m error.
+    checks = [
+        validate_chain(values, total, metres_per_unit=units.metres_per_unit)
+        for values, total in (chains or [])
+    ]
 
     raw_rooms = parse_rooms(room_blocks)
     rooms_m = [
