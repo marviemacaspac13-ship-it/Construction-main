@@ -258,9 +258,14 @@ def _read_plumbing(raw_bytes: bytes, plan_type: str):
 def _detect_plan(raw_bytes: bytes, plan_type: str):
     """Electrical and plumbing: count symbols against uploaded references.
 
-    With no references nothing can match, and an empty zero-peso estimate
-    would look like a successful scan of a plan with no materials on it.
-    Zero matches AFTER references exist is a real outcome and returns 200.
+    Two ways this comes up empty, and NEITHER is a real zero. With no
+    references nothing can match. And with references that match nothing,
+    the reader has failed - every electrical plan has electrics, which is
+    what makes it an electrical plan. An earlier version of this returned
+    200 with a zero-peso estimate in the second case, on the reasoning that
+    zero matches was a legitimate outcome. It is not: six of the eleven
+    sample electrical plans came back as cheerful zeroes, which reads as
+    "this building needs no wiring" rather than "I could not read it".
     """
     relevant = _templates_for(plan_type)
     if not relevant:
@@ -277,5 +282,26 @@ def _detect_plan(raw_bytes: bytes, plan_type: str):
         raise HTTPException(400, str(exc))
 
     detections = match_templates(image)
+    plan = plan_from_detections(detections, plan_type)
+    if not plan.fixtures:
+        raise HTTPException(
+            422,
+            {
+                "message": (
+                    f"No symbols on this {plan_type} matched any reference in the "
+                    f"Symbol Library, so there is nothing to price. Either the "
+                    f"drawing uses different symbols from the reference crops, or "
+                    f"it is too small to match - a higher-resolution export of the "
+                    f"same sheet usually works."
+                ),
+                "warnings": [
+                    f"{len(detections)} raw detections, none of them a catalog item"
+                    if detections
+                    else "no symbol matched anywhere on the sheet",
+                    f"references available: {', '.join(sorted(relevant))}",
+                ],
+            },
+        )
+
     # Detection supplies counts only; there is nothing "read" to report on.
-    return plan_from_detections(detections, plan_type), None
+    return plan, None

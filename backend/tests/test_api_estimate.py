@@ -116,6 +116,40 @@ def test_the_library_guard_is_per_trade():
     assert "Symbol Library" in res.json()["detail"]
 
 
+def test_a_plan_where_nothing_matched_is_refused_not_priced_at_zero():
+    """Zero matches is a failed read, never a real zero.
+
+    Every electrical plan has electrics - that is what makes it one. An
+    earlier version returned 200 with a zero-peso estimate here, and six of
+    the eleven sample electrical plans came back as cheerful zeroes reading
+    as "this building needs no wiring".
+    """
+    with patch("app.main.match_templates", return_value=[]):
+        with open(PLANS / "05.png", "rb") as fh:
+            res = client.post(
+                "/api/estimate/image",
+                files={"file": ("05.png", fh.read(), "image/png")},
+                data={"plan_type": "Electrical Plan"},
+            )
+    assert res.status_code == 422
+    assert "nothing to price" in res.json()["detail"]["message"]
+
+
+def test_detections_that_match_no_catalog_item_are_also_refused():
+    """A label with no UnitSpec is dropped, which can empty the plan."""
+    from app.schemas import Detection
+
+    junk = [Detection(label="NOT_A_SKU", confidence=0.9, bbox=[0, 0, 8, 8])]
+    with patch("app.main.match_templates", return_value=junk):
+        with open(PLANS / "05.png", "rb") as fh:
+            res = client.post(
+                "/api/estimate/image",
+                files={"file": ("05.png", fh.read(), "image/png")},
+                data={"plan_type": "Electrical Plan"},
+            )
+    assert res.status_code == 422
+
+
 def test_an_electrical_plan_prices_once_references_exist():
     """The counterpart: the same route succeeds against the real library."""
     with open(PLANS / "05.png", "rb") as fh:
