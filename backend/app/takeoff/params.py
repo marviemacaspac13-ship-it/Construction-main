@@ -75,6 +75,21 @@ class EstimatingParams(BaseModel):
     drain_branch_m_per_fixture: float = Field(2.0, ge=0, le=20)
     supply_branch_m_per_fixture: float = Field(2.0, ge=0, le=20)
 
+    # Length from counts. Wire, conduit and pipe are sold by the metre and
+    # are the majority of electrical and plumbing cost, but no drawing states
+    # those lengths and nothing here measures them. These allowances turn the
+    # counts we CAN read into the lengths we cannot.
+    #
+    # Configured once per project, never asked at scan time - the same shape
+    # as the wall height and waste allowances above.
+    #
+    # They are also the most expensive guesses in the engine. No guide covers
+    # electrical or plumbing, so they are mine, and Guide.docx corrected the
+    # column section by a factor of two. Every line they produce says so.
+    wire_m_per_device: float = Field(12.0, ge=0, le=100)
+    conduit_m_per_device: float = Field(6.0, ge=0, le=100)
+    main_run_m_per_fixture: float = Field(1.5, ge=0, le=50)
+
     def tagged_assumptions(self) -> list[tuple[str, str]]:
         """Every assumption, paired with the rule family it belongs to.
 
@@ -112,6 +127,14 @@ class EstimatingParams(BaseModel):
                 "electrical",
                 f"{self.slack_per_termination_m} m of conductor slack allowed per termination.",
             ),
+            (
+                "electrical",
+                f"Where no circuit routes are measured, wire and conduit are derived from the "
+                f"device count at {self.wire_m_per_device:g} m of conductor and "
+                f"{self.conduit_m_per_device:g} m of conduit per device. No plan states these "
+                f"lengths and no guide document covers electrical, so both are assumptions - "
+                f"and they are the largest single cost in the trade.",
+            ),
             ("plumbing", f"Waste allowance: pipe {self.pipe_waste:.0%}."),
             (
                 "plumbing",
@@ -120,6 +143,11 @@ class EstimatingParams(BaseModel):
                 f"{self.supply_branch_m_per_fixture:g} m of supply pipe to reach its "
                 f"line, which is an assumption: no plan states it and no guide "
                 f"document covers plumbing.",
+            ),
+            (
+                "plumbing",
+                f"A further {self.main_run_m_per_fixture:g} m per fixture is allowed for the "
+                f"shared run back to the main, which no plan dimensions either.",
             ),
         ]
         if self.include_frame:

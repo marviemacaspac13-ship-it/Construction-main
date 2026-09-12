@@ -20,6 +20,7 @@ def compute(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
     lines += _fittings(plan)
     lines += _pipe_runs(plan, params)
     lines += _from_fixture_tags(plan, params)
+    lines += _main_run(plan, params)
     return lines
 
 
@@ -137,4 +138,48 @@ def _from_fixture_tags(plan: PlanSchema, params: EstimatingParams) -> list[BomLi
                     )
                 )
 
+    return lines
+
+
+def _main_run(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
+    """The shared line every fixture drains into, and is fed from.
+
+    A branch reaches a fixture; it does not reach the septic tank. On a plan
+    with thirty fixtures that shared run is a real length and was missing
+    entirely. It scales with the fixture count because nothing dimensions
+    it and the building size is not otherwise known.
+
+    Sized by the largest fixture on the plan: a water closet puts the main
+    at 4 inches, and without one 2 inches carries it.
+    """
+    served = sum(
+        count
+        for tag, count in plan.fixture_tags.items()
+        if count > 0 and FIXTURE_PLUMBING.get(tag)
+    )
+    if served <= 0 or params.main_run_m_per_fixture <= 0:
+        return []
+
+    length_m = served * params.main_run_m_per_fixture
+    drain = "PDP03" if plan.fixture_tags.get("water_closet", 0) > 0 else "PDP01"
+
+    lines = [
+        _pipe_line(
+            drain,
+            length_m,
+            "plumbing.main_run",
+            f"{served} fixtures x {params.main_run_m_per_fixture:g} m of shared drain each",
+            params,
+        )
+    ]
+    if params.supply_branch_m_per_fixture > 0:
+        lines.append(
+            _pipe_line(
+                "PCSP01",
+                length_m,
+                "plumbing.main_run",
+                f"{served} fixtures x {params.main_run_m_per_fixture:g} m of shared supply each",
+                params,
+            )
+        )
     return lines

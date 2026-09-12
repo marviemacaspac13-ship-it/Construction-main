@@ -23,6 +23,7 @@ def compute(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
     lines += _devices(plan)
     lines += _boxes(plan)
     lines += _wire_and_conduit(plan, params)
+    lines += _wire_and_conduit_from_devices(plan, params)
     return lines
 
 
@@ -102,6 +103,76 @@ def _wire_and_conduit(plan: PlanSchema, params: EstimatingParams) -> list[BomLin
                     f"+ {params.conduit_waste:.0%} waste"
                 ),
                 inputs={"route_length_m": run.length_m},
+            )
+        )
+    return lines
+
+
+# Gauge follows what the device is for, using the same split the measured
+# path uses: lighting circuits take #14, convenience circuits #12.
+_GAUGE_BY_KIND = {
+    "lighting": WIRE_ITEM_BY_SERVICE["lighting"],
+    "convenience": WIRE_ITEM_BY_SERVICE["convenience"],
+}
+
+
+def _wire_and_conduit_from_devices(
+    plan: PlanSchema, params: EstimatingParams
+) -> list[BomLine]:
+    """Wire and conduit derived from the device count, when no route is known.
+
+    Wire is roughly two thirds of an electrical estimate and no drawing
+    states its length - a plan shows where the outlets are, never how much
+    cable reaches them. Without this the trade prices at a small fraction
+    of itself: 05.png came to P1,224 against a realistic P18,000-25,000.
+
+    **Only fires when `plan.runs` is empty.** A measured route always wins,
+    and the two must never both apply. The rule names differ from the
+    measured ones for the same reason: the audit ledger records rule names,
+    and a reader has to be able to tell a measured length from a derived
+    one.
+    """
+    if plan.runs:
+        return []
+
+    lighting = sum(f.count for f in plan.fixtures if f.item_id in CEILING_OUTLET_ITEMS)
+    convenience = sum(f.count for f in plan.fixtures if f.item_id in WIRING_DEVICE_ITEMS)
+    devices = lighting + convenience
+    if devices <= 0:
+        return []
+
+    lines: list[BomLine] = []
+    for kind, count in (("lighting", lighting), ("convenience", convenience)):
+        if count <= 0 or params.wire_m_per_device <= 0:
+            continue
+        length_m = count * params.wire_m_per_device
+        lines.append(
+            BomLine(
+                item_id=_GAUGE_BY_KIND[kind],
+                quantity=with_waste(length_m, params.wire_waste),
+                rule="electrical.conductor_from_count",
+                derivation=(
+                    f"{count} {kind} devices x {params.wire_m_per_device:g} m of conductor "
+                    f"each + {params.wire_waste:.0%} waste - DERIVED from the count, no "
+                    f"circuit routes were measured"
+                ),
+                inputs={"devices": float(count)},
+            )
+        )
+
+    if params.conduit_m_per_device > 0:
+        conduit_m = devices * params.conduit_m_per_device
+        lines.append(
+            BomLine(
+                item_id=CONDUIT_ITEM,
+                quantity=with_waste(conduit_m, params.conduit_waste),
+                rule="electrical.conduit_from_count",
+                derivation=(
+                    f"{devices} devices x {params.conduit_m_per_device:g} m of conduit each "
+                    f"+ {params.conduit_waste:.0%} waste - DERIVED from the count, no "
+                    f"circuit routes were measured"
+                ),
+                inputs={"devices": float(devices)},
             )
         )
     return lines
