@@ -146,6 +146,46 @@ CEILING_OUTLET_ITEMS: frozenset[str] = frozenset({"CLR01", "CLR02", "CLR03"})
 SUPPLY_PIPE_ITEM: dict[str, str] = {'1/2"': "PCSP01", '3/4"': "PCSP02"}
 DRAIN_PIPE_ITEM: dict[str, str] = {'2"': "PDP01", '3"': "PDP02", '4"': "PDP03"}
 
+# --- sanitary fixtures ---------------------------------------------------
+# What each fixture on a plumbing plan pulls with it. The fixture itself is
+# never priced - it is client-supplied, the same way a floor plan prices
+# walls but not the doors in them - so a tag is only worth counting because
+# of the pipe and fittings it implies.
+#
+# Drains branch with a WYE rather than a tee: the shallow 45 degree angle
+# keeps solids moving where a square tee would trap them. Supply branches
+# use a plain tee. Sizes are PH sanitary practice - 4" off a water closet,
+# 2" off everything else.
+FIXTURE_PLUMBING: dict[str, dict[str, str]] = {
+    "water_closet": {
+        "drain": "PDP03", "drain_fitting": "PVYO03",
+        "supply": "PCSP01", "supply_fitting": "PVTB01",
+    },
+    "lavatory": {
+        "drain": "PDP01", "drain_fitting": "PVYO01",
+        "supply": "PCSP01", "supply_fitting": "PVTB01",
+    },
+    "urinal": {
+        "drain": "PDP01", "drain_fitting": "PVYO01",
+        "supply": "PCSP01", "supply_fitting": "PVTB01",
+    },
+    # A floor drain takes waste away and is fed by nothing.
+    "floor_drain": {"drain": "PDP01", "drain_fitting": "PVYO01"},
+    # A cleanout is an access point on a line that already exists. It adds
+    # no pipe of its own and has no catalog row, so it is counted and
+    # nothing more.
+    "cleanout": {},
+}
+
+# Tags as they are printed beside the fixture, for app/extract/tags.py.
+FIXTURE_TAG_PATTERNS: dict[str, str] = {
+    "water_closet": r"WC",
+    "lavatory": r"LAV",
+    "urinal": r"U",
+    "floor_drain": r"FD",
+    "cleanout": r"C\.?O\.?",
+}
+
 # --- standard opening sizes (PH residential) -----------------------------
 # Used when a plan shows door/window TAGS but no schedule table.
 DEFAULT_DOOR_M = (0.90, 2.10)

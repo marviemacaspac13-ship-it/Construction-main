@@ -2,6 +2,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import traceback
+
+import cv2
+import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,6 +15,9 @@ from app.pricing import price_takeoff
 from app.schemas import ScanResponse
 from app.materials import load_catalog
 from app import audit, templates_store
+from app.extract.tags import count_tags, read_tiled, tally
+from app.takeoff.constants import FIXTURE_PLUMBING, FIXTURE_TAG_PATTERNS
+from app.takeoff.schema import PlanSchema
 
 from pydantic import BaseModel
 
@@ -30,6 +36,8 @@ VALID_PLAN_TYPES = ("Floor Plan", "Electrical Plan", "Plumbing Plan")
 # they are detected against uploaded references. Both paths end in the same
 # PlanSchema and the same rule engine.
 OCR_PLAN_TYPES = ("Floor Plan",)
+# Read by counting printed tags rather than by matching symbols.
+TAG_PLAN_TYPES = ("Plumbing Plan",)
 
 
 class EstimateRequest(BaseModel):
@@ -145,13 +153,15 @@ async def estimate_image(
 
     if plan_type in OCR_PLAN_TYPES:
         plan, report = _read_plan(raw_bytes, plan_type)
+    elif plan_type in TAG_PLAN_TYPES:
+        plan, report = _read_plumbing(raw_bytes, plan_type)
     else:
         plan, report = _detect_plan(raw_bytes, plan_type)
 
     estimate = estimate_plan(plan, load_catalog())
     # Assumptions are deliberately not surfaced in the UI, so the only place
     # they survive is the ledger. See app/audit.py.
-    audit.record_estimate(plan_type, estimate, report)
+    audit.record_estimate(plan_type, estimate, report, plan)
 
     return ImageEstimateResponse(extraction=report, estimate=estimate)
 
@@ -200,6 +210,49 @@ def _templates_for(plan_type: str) -> dict[str, list[str]]:
         for item_id, files in templates_store.list_templates().items()
         if (catalog.get(item_id) or {}).get("category") == category
     }
+
+
+def _read_plumbing(raw_bytes: bytes, plan_type: str):
+    """Plumbing: count printed fixture tags, then derive what serves them.
+
+    Not the detection path. The countable things on a sanitary plan - WC,
+    LAV, FD - are written beside the fixture rather than drawn as a glyph,
+    so there is nothing to template-match; and the fixtures themselves are
+    client-supplied and never priced. What gets priced is the pipe and
+    fittings the rules derive from the counts.
+    """
+    # Decoded plain, NOT through preprocess_image. Its denoise smooths small
+    # glyphs: good for template matching, which wants clean edges, bad for a
+    # text detector, which wants sharp strokes. Measured on 07.png the
+    # preprocessed image reads 6 water closets against 8 plain.
+    image = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise HTTPException(400, "Could not decode image - corrupt or unsupported format.")
+
+    counts = tally(count_tags(read_tiled(image), FIXTURE_TAG_PATTERNS))
+
+    # A cleanout implies no materials, so a plan where only cleanouts were
+    # read has produced nothing to price. Returning a cheerful zero there
+    # is the same trap the empty-library guard exists to close.
+    if not any(FIXTURE_PLUMBING.get(tag) for tag in counts):
+        raise HTTPException(
+            422,
+            {
+                "message": (
+                    "No fixture tags could be read on this plumbing plan, so "
+                    "there is nothing to derive pipework from. Tags like WC, "
+                    "LAV and FD are small; a higher-resolution export of the "
+                    "same drawing usually reads."
+                ),
+                "warnings": [f"read: {dict(counts)}" if counts else "read: nothing"],
+            },
+        )
+
+    plan = PlanSchema(
+        plan_type=plan_type, source="tags", fixture_tags=dict(counts)
+    )
+    # Nothing was measured, so there is no extraction report to give.
+    return plan, None
 
 
 def _detect_plan(raw_bytes: bytes, plan_type: str):

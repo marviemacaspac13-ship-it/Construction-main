@@ -67,6 +67,14 @@ class EstimatingParams(BaseModel):
     # the assumption.
     include_perimeter_beam: bool = True
 
+    # Sanitary branch runs. Nothing on a plumbing plan states how far a
+    # fixture sits from the line it joins, and tracing the pipe routes is a
+    # separate job entirely, so each fixture is allowed a branch length.
+    # These are the least-supported numbers in the engine: Guide.docx covers
+    # concrete and masonry only, and there is no plumbing equivalent.
+    drain_branch_m_per_fixture: float = Field(2.0, ge=0, le=20)
+    supply_branch_m_per_fixture: float = Field(2.0, ge=0, le=20)
+
     def tagged_assumptions(self) -> list[tuple[str, str]]:
         """Every assumption, paired with the rule family it belongs to.
 
@@ -105,6 +113,14 @@ class EstimatingParams(BaseModel):
                 f"{self.slack_per_termination_m} m of conductor slack allowed per termination.",
             ),
             ("plumbing", f"Waste allowance: pipe {self.pipe_waste:.0%}."),
+            (
+                "plumbing",
+                f"Fixtures are counted but not priced - they are client-supplied. "
+                f"Each is allowed {self.drain_branch_m_per_fixture:g} m of drain and "
+                f"{self.supply_branch_m_per_fixture:g} m of supply pipe to reach its "
+                f"line, which is an assumption: no plan states it and no guide "
+                f"document covers plumbing.",
+            ),
         ]
         if self.include_frame:
             w, d = COLUMN_SECTION_M

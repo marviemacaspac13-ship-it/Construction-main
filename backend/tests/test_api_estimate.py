@@ -97,23 +97,23 @@ def test_electrical_plan_is_refused_when_the_library_is_empty():
     assert "Symbol Library" in res.json()["detail"]
 
 
-def test_a_plumbing_plan_is_refused_while_only_electrical_crops_exist():
-    """The guard is per-trade, and has to be.
+def test_the_library_guard_is_per_trade():
+    """Asking whether ANY template exists is not enough.
 
-    Asking whether ANY template exists is not enough: once the electrical
-    crops were installed a plumbing plan sailed past and returned a
-    cheerful 200 with a zero-peso estimate, which is exactly the
-    "successful scan of a plan with no materials on it" the guard exists
-    to prevent.
+    Once electrical crops were installed, a plan of another trade sailed
+    past the guard and returned a cheerful 200 with a zero-peso estimate -
+    exactly the "successful scan of a plan with no materials on it" the
+    guard exists to prevent. Plumbing no longer goes through templates at
+    all, so this is checked with the library emptied instead.
     """
-    with open(PLANS / "07.png", "rb") as fh:
+    with patch("app.main._templates_for", return_value={}):
         res = client.post(
             "/api/estimate/image",
-            files={"file": ("07.png", fh.read(), "image/png")},
-            data={"plan_type": "Plumbing Plan"},
+            files={"file": ("plan.png", b"x", "image/png")},
+            data={"plan_type": "Electrical Plan"},
         )
     assert res.status_code == 422
-    assert "Plumbing Plan" in res.json()["detail"]
+    assert "Symbol Library" in res.json()["detail"]
 
 
 def test_an_electrical_plan_prices_once_references_exist():
@@ -225,21 +225,45 @@ def test_electrical_plan_is_priced_from_detections_when_references_exist():
     assert est["grand_total"] > 0
 
 
-def test_plumbing_plan_is_priced_from_detections():
-    from app.schemas import Detection
+def test_a_plumbing_plan_is_read_not_detected():
+    """Plumbing takes the tag-reading path, never template matching.
 
-    detections = [Detection(label="PVTB01", confidence=0.9, bbox=[0, 0, 1, 1])] * 4
-    with patch("app.templates_store.list_templates", return_value={"PVTB01": ["a.png"]}), \
-         patch("app.main.preprocess_image", return_value=np.zeros((10, 10, 3), np.uint8)), \
-         patch("app.main.match_templates", return_value=detections):
-        res = client.post(
-            "/api/estimate/image",
-            files={"file": ("plan.png", b"x", "image/png")},
-            data={"plan_type": "Plumbing Plan"},
-        )
+    The countable things on a sanitary plan are written beside the fixture,
+    not drawn, so there is nothing to match. A stub asserts the routing:
+    if this ever went through match_templates again it would need a symbol
+    library that cannot exist.
+    """
+    with patch("app.main.match_templates") as detector,          patch("app.main.read_tiled", return_value=[]),          patch("app.main.tally", return_value={"water_closet": 3, "lavatory": 2}):
+        with open(PLANS / "07.png", "rb") as fh:
+            res = client.post(
+                "/api/estimate/image",
+                files={"file": ("07.png", fh.read(), "image/png")},
+                data={"plan_type": "Plumbing Plan"},
+            )
+    detector.assert_not_called()
     assert res.status_code == 200, res.text
+
     est = res.json()["estimate"]
-    assert {li["item_id"]: li["quantity"] for li in est["line_items"]}["PVTB01"] == 4
+    by_item = {li["item_id"]: li["quantity"] for li in est["line_items"]}
+    # 3 water closets pull 4in drain and its wye; 2 lavatories pull 2in.
+    assert by_item["PVYO03"] == 3
+    assert by_item["PVYO01"] == 2
+    # The fixtures themselves are client-supplied and never priced.
+    assert not any(k.startswith("PF") for k in by_item)
+    assert any("counted but not priced" in a for a in est["assumptions"])
+
+
+def test_a_plumbing_plan_with_no_readable_tags_is_refused():
+    """A zero-peso 200 would read as "this plan needs no pipework"."""
+    with patch("app.main.read_tiled", return_value=[]),          patch("app.main.tally", return_value={}):
+        with open(PLANS / "07.png", "rb") as fh:
+            res = client.post(
+                "/api/estimate/image",
+                files={"file": ("07.png", fh.read(), "image/png")},
+                data={"plan_type": "Plumbing Plan"},
+            )
+    assert res.status_code == 422
+    assert "higher-resolution" in res.json()["detail"]["message"]
 
 
 def test_an_unknown_plan_type_is_rejected():

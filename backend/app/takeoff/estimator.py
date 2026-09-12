@@ -69,13 +69,20 @@ def _source_assumptions(source: str) -> list[str]:
     Library, so the variant is a librarian's choice and has to say so - an
     OT01 line otherwise reads as though the plan specified 1-gang.
     """
-    if source != "detection":
-        return []
-    return [
-        "Counts come from symbol matching. The drawing distinguishes symbol "
-        "families, not catalog variants, so which variant each count is "
-        "priced as follows the Symbol Library mapping rather than the plan.",
-    ]
+    if source == "detection":
+        return [
+            "Counts come from symbol matching. The drawing distinguishes symbol "
+            "families, not catalog variants, so which variant each count is "
+            "priced as follows the Symbol Library mapping rather than the plan.",
+        ]
+    if source == "tags":
+        return [
+            "Counts come from reading printed fixture tags. Unlike a dimension "
+            "chain, a tag count has nothing to check itself against, so a "
+            "fixture the reader missed is invisible and the total is short by "
+            "whatever it did not see.",
+        ]
+    return []
 
 
 def _round_quantity(item_id: str, quantity: float) -> float:

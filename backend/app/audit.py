@@ -35,7 +35,7 @@ def _rotate_if_large() -> None:
         LEDGER.replace(LEDGER.with_suffix(".jsonl.1"))
 
 
-def record_estimate(plan_type: str, estimate, extraction=None) -> None:
+def record_estimate(plan_type: str, estimate, extraction=None, plan=None) -> None:
     """Append one line describing an estimate and everything behind it."""
     try:
         record = {
@@ -50,6 +50,9 @@ def record_estimate(plan_type: str, estimate, extraction=None) -> None:
             "unpriced": [li.item_id for li in estimate.unpriced],
             "assumptions": estimate.assumptions,
         }
+        if getattr(plan, "fixture_tags", None):
+            # Counted but never priced, so they appear in no line item.
+            record["fixture_tags"] = dict(plan.fixture_tags)
         if extraction is not None:
             record["extraction"] = {
                 "unit": extraction.unit,

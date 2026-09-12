@@ -130,4 +130,13 @@ class PlanSchema(BaseModel):
     concrete: list[ConcreteElement] = Field(default_factory=list)
     runs: list[Run] = Field(default_factory=list)
     fixtures: list[FixtureCount] = Field(default_factory=list)
-    source: Literal["manual", "detection", "ocr", "cad"] = "manual"
+
+    # Things counted on the drawing that are NOT themselves bought: the
+    # toilets and lavatories on a sanitary plan, which the client supplies.
+    # They earn their place by driving what IS bought - the pipe and
+    # fittings that serve them - exactly as a detected outlet drives the
+    # utility box behind it. Keyed by tag name, not by item_id, because
+    # they have no catalog row and never will.
+    fixture_tags: dict[str, int] = Field(default_factory=dict)
+
+    source: Literal["manual", "detection", "ocr", "tags", "cad"] = "manual"
