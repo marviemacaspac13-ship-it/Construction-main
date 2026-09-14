@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Cpu, Loader2, Layers, Boxes, Target, Gauge, Sparkles } from "lucide-react";
 import { checkDatasetReady, startTraining, getTrainStatus, TrainStatus } from "../../lib/train";
+import { listMaterials, listTemplates } from "../../lib/templates";
 import { useNavigate } from "react-router";
 
 const STEPS = [
@@ -18,10 +19,25 @@ export function TrainModelScreen() {
   const [status, setStatus] = useState<TrainStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSteps, setShowSteps] = useState(false);
+  const [library, setLibrary] = useState<{ crops: number; classes: number } | null>(null);
+  const [skuCount, setSkuCount] = useState<number | null>(null);
   const pollRef = useRef<number | null>(null);
+
+  const startPolling = () => {
+    if (pollRef.current) return;
+    pollRef.current = window.setInterval(pollStatus, 500);
+  };
 
   const refreshDataset = () => {
     checkDatasetReady().then(setDatasetReady).catch(() => setDatasetReady(false));
+    listTemplates()
+      .then((lib) =>
+        setLibrary({
+          crops: Object.values(lib).reduce((n, files) => n + files.length, 0),
+          classes: Object.keys(lib).length,
+        }),
+      )
+      .catch(() => setLibrary(null));
   };
 
   const pollStatus = () => {
@@ -38,7 +54,15 @@ export function TrainModelScreen() {
 
   useEffect(() => {
     refreshDataset();
-    pollStatus();
+    listMaterials().then((m) => setSkuCount(m.length)).catch(() => {});
+    // A run started before navigating away is still going — pick it back up
+    // rather than showing the epoch it was on when the screen unmounted.
+    getTrainStatus()
+      .then((s) => {
+        setStatus(s);
+        if (s.status === "running") startPolling();
+      })
+      .catch(() => {});
     return () => { if (pollRef.current) window.clearInterval(pollRef.current); };
   }, []);
 
@@ -47,7 +71,7 @@ export function TrainModelScreen() {
     try {
       await startTraining(100);
       pollStatus();
-      pollRef.current = window.setInterval(pollStatus, 3000);
+      startPolling();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start training.");
     }
@@ -62,10 +86,24 @@ export function TrainModelScreen() {
   const statusLabel = !status || status.status === "idle" ? "Idle" : isRunning ? "Training" : isDone ? "Trained" : "Error";
 
   const stats = [
-    { Icon: Boxes,  label: "Catalog SKUs",  value: "45",       sub: "materials priced" },
+    { Icon: Boxes,  label: "Catalog SKUs",  value: skuCount === null ? "\u2014" : String(skuCount), sub: "materials priced" },
     { Icon: Layers, label: "Base Model",    value: "YOLOv8n",  sub: "swap via .env" },
-    { Icon: Target, label: "Dataset",       value: datasetReady === null ? "\u2014" : datasetReady ? "Ready" : "Missing", sub: "training_data/data.yaml" },
+    {
+      Icon: Target,
+      label: "Dataset",
+      value: datasetReady === null ? "\u2014" : datasetReady ? "Ready" : "Missing",
+      sub: library ? `${library.crops} crops \u00b7 ${library.classes} classes` : "symbol library",
+    },
     { Icon: Gauge,  label: "Progress",      value: isRunning ? `${progressPct}%` : isDone ? "100%" : "\u2014", sub: status?.total_epochs ? `${status.current_epoch}/${status.total_epochs} epochs` : "not started" },
+  ];
+
+  // Shown only once a run is under way \u2014 an empty metrics row before the
+  // first epoch reads as a model that scored zero.
+  const metrics = [
+    { label: "Box Loss",   value: status?.box_loss,  digits: 3 },
+    { label: "Cls Loss",   value: status?.cls_loss,  digits: 3 },
+    { label: "mAP@50",     value: status?.map50,     digits: 3 },
+    { label: "mAP@50-95",  value: status?.map50_95,  digits: 3 },
   ];
 
   return (
@@ -148,16 +186,36 @@ export function TrainModelScreen() {
           </div>
         </div>
 
+        {(isRunning || isDone) && status?.box_loss !== null && (
+          <div className="grid grid-cols-4 divide-x divide-border border-t border-border animate-fade-in">
+            {metrics.map((m) => (
+              <div key={m.label} className="px-5 py-4">
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">{m.label}</p>
+                <p className="text-[13px] font-mono text-foreground tabular-nums">
+                  {m.value === null || m.value === undefined ? "—" : m.value.toFixed(m.digits)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {status && status.status !== "idle" && (
-          <div className="px-5 pb-5 animate-fade-in">
+          <div className="px-5 py-5 border-t border-border animate-fade-in">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-mono text-muted-foreground">{status.message || status.status}</span>
-              {status.total_epochs > 0 && (
-                <span className="text-[11px] font-mono text-muted-foreground">{status.current_epoch}/{status.total_epochs}</span>
-              )}
+              <span className="text-[11px] font-mono text-muted-foreground tabular-nums">
+                {isRunning && status.eta_seconds !== null
+                  ? `${status.eta_seconds}s remaining`
+                  : status.total_epochs > 0
+                    ? `${status.current_epoch}/${status.total_epochs}`
+                    : ""}
+              </span>
             </div>
             <div className="h-1.5 rounded-full bg-border overflow-hidden">
-              <div className="h-full bg-foreground transition-all duration-500" style={{ width: `${isDone ? 100 : progressPct}%` }} />
+              <div
+                className={`h-full bg-foreground transition-all duration-500 ${isRunning ? "shimmer-surface" : ""}`}
+                style={{ width: `${isDone ? 100 : progressPct}%` }}
+              />
             </div>
           </div>
         )}
@@ -183,7 +241,7 @@ export function TrainModelScreen() {
           </button>
           {!datasetReady && !isRunning && (
             <p className="text-[10px] font-mono text-orange-400 mt-2 max-w-[220px]">
-              Disabled — no dataset found at training_data/data.yaml yet.
+              Disabled — the symbol library has no reference crops yet.
             </p>
           )}
         </div>
