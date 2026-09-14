@@ -232,11 +232,12 @@ def test_electrical_plan_is_priced_from_detections_when_references_exist():
     """The whole point of Task 13: this plan type can now be estimated."""
     from app.schemas import Detection
 
+    # Enough to clear MIN_DEVICES - a sheet with three symbols on it is
+    # refused now, and that is a different test.
     detections = [
-        Detection(label="OT01", confidence=0.9, bbox=[0, 0, 1, 1]),
-        Detection(label="OT01", confidence=0.9, bbox=[2, 2, 3, 3]),
-        Detection(label="SW01", confidence=0.8, bbox=[4, 4, 5, 5]),
-    ]
+        Detection(label="OT01", confidence=0.9, bbox=[i, i, i + 1, i + 1])
+        for i in range(12)
+    ] + [Detection(label="SW01", confidence=0.8, bbox=[40, 40, 41, 41])]
     with patch("app.templates_store.list_templates", return_value={"OT01": ["a.png"]}), \
          patch("app.main.preprocess_image", return_value=np.zeros((10, 10, 3), np.uint8)), \
          patch("app.main.match_templates", return_value=detections):
@@ -253,9 +254,9 @@ def test_electrical_plan_is_priced_from_detections_when_references_exist():
     est = body["estimate"]
     assert est["plan_type"] == "Electrical Plan"
     by_sku = {li["item_id"]: li["quantity"] for li in est["line_items"]}
-    assert by_sku["OT01"] == 2
+    assert by_sku["OT01"] == 12
     assert by_sku["SW01"] == 1
-    assert by_sku["UTB01"] == 3  # one utility box per wiring device
+    assert by_sku["UTB01"] == 13  # one utility box per wiring device
     assert est["grand_total"] > 0
 
 

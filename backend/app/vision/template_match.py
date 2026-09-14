@@ -6,7 +6,21 @@ from app.templates_store import load_templates_for_matching
 
 SCALES = [0.6, 0.75, 0.85, 1.0, 1.15, 1.3, 1.5]
 
-MATCH_THRESHOLD = 0.72  
+# Set from the only plan anybody has counted by hand. On `05.png` the true
+# figures are 21 ceiling outlets and 14 convenience outlets; this threshold
+# recovers 15 and 13 of them, against 13 and 8 at the old 0.72.
+#
+# 0.66 is the last safe step, not a comfortable middle. One notch lower at
+# 0.64 the wall outlet jumps to 28 against a true 14, and by 0.55 the sheet
+# yields 145 - door swings and wall hatching. Every detection at 0.66 is a
+# distinct location: no cross-label overlaps, no near-duplicates, and both
+# counts still sit UNDER the hand count, so nothing here is a false
+# positive. Do not lower it further without new ground truth.
+#
+# Recall bought here is paid for elsewhere: at 0.66 plans that used to match
+# nothing return two to five stray hits. MIN_DEVICES in `main.py` is what
+# keeps those from being priced - the two constants move together.
+MATCH_THRESHOLD = 0.66
 NMS_IOU_THRESHOLD = 0.3 
 
 

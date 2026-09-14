@@ -39,6 +39,14 @@ OCR_PLAN_TYPES = ("Floor Plan",)
 # Read by counting printed tags rather than by matching symbols.
 TAG_PLAN_TYPES = ("Plumbing Plan",)
 
+# The fewest symbols a real electrical sheet can plausibly carry. The one
+# plan with a hand count has 35; the sheets that match nothing real return
+# two to five stray hits at the current threshold, and an estimate built on
+# three detections is a near-miss dressed up as a reading. This is the same
+# rule as the empty-result guard below, one step along: a result too sparse
+# to be a drawing is not a cheaper building, it is a failed read.
+MIN_DEVICES = 10
+
 
 class EstimateRequest(BaseModel):
     plan: PlanSchema
@@ -283,6 +291,25 @@ def _detect_plan(raw_bytes: bytes, plan_type: str):
 
     detections = match_templates(image)
     plan = plan_from_detections(detections, plan_type)
+
+    devices = sum(f.count for f in plan.fixtures)
+    if plan.fixtures and devices < MIN_DEVICES:
+        raise HTTPException(
+            422,
+            {
+                "message": (
+                    f"Only {devices} symbols on this {plan_type} matched a reference, "
+                    f"too few to be a reading of the whole sheet. A drawing this "
+                    f"sparse is usually a scan the matcher could not resolve - a "
+                    f"higher-resolution export of the same sheet usually works."
+                ),
+                "warnings": [
+                    f"{devices} devices matched, {MIN_DEVICES} is the minimum to price",
+                    f"references available: {', '.join(sorted(relevant))}",
+                ],
+            },
+        )
+
     if not plan.fixtures:
         raise HTTPException(
             422,
