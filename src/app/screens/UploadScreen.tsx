@@ -2,13 +2,19 @@ import { useCallback, useRef, useState } from "react";
 import { CloudUpload, FolderOpen, Check, ChevronRight, ArrowLeft } from "lucide-react";
 import { SectionBar, Btn } from "../components/ui";
 import { useLocation, useNavigate } from "react-router";
+import type { ProjectDraft } from "../../lib/projects";
 
-type NavState = { projectId?: string; planType?: string };
+/**
+ * `projectId` is set only when coming BACK here from a failed scan. The
+ * project already exists in that case and must be reused, or a retry files
+ * a second row for the same drawing.
+ */
+type NavState = { draft?: ProjectDraft; projectId?: string };
 
 export function UploadScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectId, planType } = (location.state ?? {}) as NavState;
+  const { draft, projectId } = (location.state ?? {}) as NavState;
 
   const [dragging, setDragging] = useState(false);
   const [file, setFile]         = useState<File | null>(null);
@@ -22,22 +28,22 @@ export function UploadScreen() {
   }, []);
 
   const handleContinue = () => {
-    if (!projectId) {
-      // Reached this screen without going through project creation first.
+    if (!draft) {
+      // Reached this screen without going through the details form first.
       navigate("/projects/details");
       return;
     }
     if (!file) return;
-    navigate("/scanning", { state: { projectId, planType, file } });
+    navigate("/scanning", { state: { draft, projectId, file } });
   };
 
   return (
     <div className="p-10 max-w-2xl animate-page-in">
       <SectionBar>Upload Plan</SectionBar>
 
-      {!projectId && (
+      {!draft && (
         <p className="text-[11px] font-mono text-orange-400 mb-4 animate-pop-in">
-          No project selected — go back and create one first.
+          No project details yet — go back and fill them in first.
         </p>
       )}
 
@@ -77,7 +83,13 @@ export function UploadScreen() {
         <div className="flex items-center justify-between px-6 py-4 border-t border-border">
           <p className="text-[10px] font-mono text-muted-foreground">ⓘ Please make sure the plan image is clear and legible.</p>
           <div className="flex gap-2">
-            <Btn variant="ghost" onClick={() => navigate("/projects/details")} icon={<ArrowLeft size={11} />}>Go Back</Btn>
+            <Btn
+              variant="ghost"
+              onClick={() => navigate("/projects/details", { state: { draft } })}
+              icon={<ArrowLeft size={11} />}
+            >
+              Go Back
+            </Btn>
             <Btn variant="secondary" onClick={handleContinue} icon={<ChevronRight size={11} />} disabled={!file}>
               Continue
             </Btn>

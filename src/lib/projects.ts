@@ -19,11 +19,24 @@ export type Project = {
   updated_at: string;
 };
 
-export async function createProject(input: {
+/**
+ * What the UI has collected before a project exists.
+ *
+ * A draft is carried through Details -> Upload -> Scanning in router state
+ * and is NOT persisted. The row is written only once there is a plan image
+ * to scan, because a project with no image can never be completed by
+ * anything: only ScanningScreen ever updates one, so a row created earlier
+ * sits at status "processing" for ever and renders as a permanent
+ * "Scanning...". Abandoning the flow - Go Back, a closed tab, a refresh
+ * that drops the File out of router state - must leave nothing behind.
+ */
+export type ProjectDraft = {
   name: string;
   description: string;
   planType: string;
-}): Promise<Project> {
+};
+
+export async function createProject(input: ProjectDraft): Promise<Project> {
   const { data, error } = await supabase
     .from("projects")
     .insert({ name: input.name, description: input.description, plan_type: input.planType, status: "processing" })

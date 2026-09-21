@@ -12,7 +12,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { Btn, FieldWrap, TxtArea, Mono } from "./ui";
-import { createProject } from "../../lib/projects";
+import type { ProjectDraft } from "../../lib/projects";
 
 type Step = 1 | 2;
 
@@ -75,18 +75,22 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
   const canContinueStep1 = name.trim().length > 0;
   const canStart = file !== null && !starting;
 
-  const handleStart = async () => {
+  /**
+   * Hands ScanningScreen a draft rather than creating the project here, so
+   * both ways into a scan - this modal and the Details screen - go through
+   * exactly one code path that writes a row.
+   */
+  const handleStart = () => {
     if (!file || starting) return;
     setStarting(true);
     setError("");
-    try {
-      const project = await createProject({ name: name.trim(), description: desc.trim(), planType });
-      onClose();
-      navigate("/scanning", { state: { projectId: project.id, planType, file } });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't create the project.");
-      setStarting(false);
-    }
+    const draft: ProjectDraft = {
+      name: name.trim(),
+      description: desc.trim(),
+      planType,
+    };
+    onClose();
+    navigate("/scanning", { state: { draft, file } });
   };
 
   return (

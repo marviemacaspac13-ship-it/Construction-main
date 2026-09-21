@@ -1,15 +1,21 @@
 import { useState } from "react";
 import { FolderOpen, ChevronRight, LayoutDashboard, Zap, Layers } from "lucide-react";
 import { SectionBar, Btn, FieldWrap, TxtArea, Mono } from "../components/ui";
-import { useNavigate } from "react-router";
-import { createProject } from "../../lib/projects";
+import { useLocation, useNavigate } from "react-router";
+import type { ProjectDraft } from "../../lib/projects";
+
+type NavState = { draft?: ProjectDraft };
 
 export function ProjectDetailsScreen() {
   const navigate = useNavigate();
-  const [title, setTitle]       = useState("");
-  const [desc, setDesc]         = useState("");
-  const [planType, setPlanType] = useState("Floor Plan");
-  const [saving, setSaving]     = useState(false);
+  const location = useLocation();
+  // Coming back from Upload returns the draft, so a change of mind does not
+  // cost the user everything they typed.
+  const { draft } = (location.state ?? {}) as NavState;
+
+  const [title, setTitle]       = useState(draft?.name ?? "");
+  const [desc, setDesc]         = useState(draft?.description ?? "");
+  const [planType, setPlanType] = useState(draft?.planType ?? "Floor Plan");
   const [error, setError]       = useState("");
 
   const plans = [
@@ -18,21 +24,25 @@ export function ProjectDetailsScreen() {
     { id: "Plumbing Plan",   Icon: Layers },
   ];
 
-  const handleContinue = async () => {
+  /**
+   * Carries the details forward WITHOUT writing anything.
+   *
+   * This used to insert the project here and hand Upload an id, which meant
+   * every abandoned flow left a row stuck at "Scanning..." for ever.
+   * ScanningScreen creates it now, once there is a file to scan.
+   */
+  const handleContinue = () => {
     if (!title.trim()) {
       setError("Give the project a name first.");
       return;
     }
     setError("");
-    setSaving(true);
-    try {
-      const project = await createProject({ name: title.trim(), description: desc.trim(), planType });
-      navigate("/upload", { state: { projectId: project.id, planType } });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't create the project.");
-    } finally {
-      setSaving(false);
-    }
+    const next: ProjectDraft = {
+      name: title.trim(),
+      description: desc.trim(),
+      planType,
+    };
+    navigate("/upload", { state: { draft: next } });
   };
 
   return (
@@ -95,7 +105,7 @@ export function ProjectDetailsScreen() {
           <div className="flex gap-2">
             <Btn variant="ghost" onClick={() => navigate("/projects")}>Cancel</Btn>
             <Btn variant="secondary" onClick={handleContinue} icon={<ChevronRight size={11} />}>
-              {saving ? "Creating…" : "Continue"}
+              Continue
             </Btn>
           </div>
         </div>

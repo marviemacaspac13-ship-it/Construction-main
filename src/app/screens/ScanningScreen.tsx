@@ -2,9 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { PixelLogo } from "../components/PixelLogo";
 import { useLocation, useNavigate } from "react-router";
 import { estimateFromImage, readsPrintedDimensions } from "../../lib/estimate";
-import { markProjectError, updateProjectEstimate } from "../../lib/projects";
+import {
+  createProject,
+  markProjectError,
+  updateProjectEstimate,
+  type ProjectDraft,
+} from "../../lib/projects";
 
-type NavState = { projectId?: string; planType?: string; file?: File };
+/**
+ * `projectId` is present only on a retry after a failed scan - the row
+ * already exists and is reused, so retrying does not file a second one.
+ */
+type NavState = { draft?: ProjectDraft; projectId?: string; file?: File };
 
 /** Reading printed dimensions off the drawing. */
 const OCR_STEPS = [
@@ -27,22 +36,28 @@ const DETECTION_STEPS = [
 export function ScanningScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectId, planType, file } = (location.state ?? {}) as NavState;
+  const { draft, projectId, file } = (location.state ?? {}) as NavState;
 
   const [progress, setProgress] = useState(0);
   const [step, setStep]         = useState(0);
   const [error, setError]       = useState("");
   const ran = useRef(false);
+  // Survives a failed scan so "Back to Upload" can hand the existing row
+  // back instead of orphaning it.
+  const created = useRef<string | null>(projectId ?? null);
 
+  const planType = draft?.planType;
   const readsDimensions = readsPrintedDimensions(planType);
   const steps = readsDimensions ? OCR_STEPS : DETECTION_STEPS;
 
   useEffect(() => {
-    if (!projectId || !file) {
+    if (!draft || !file) {
       navigate("/projects/details");
       return;
     }
-    if (ran.current) return; // guard against React StrictMode double-invoke in dev
+    // Guards the StrictMode double-invoke. It matters more than it used to:
+    // this effect now CREATES the project, so running twice files two rows.
+    if (ran.current) return;
     ran.current = true;
 
     // Animate progress up to 90% while the real request is in flight - we
@@ -56,23 +71,37 @@ export function ScanningScreen() {
       });
     }, 90);
 
+    // The project row is written HERE and nowhere earlier. Everything before
+    // this point is a draft in router state, so abandoning the flow leaves
+    // nothing behind. A scan that fails still leaves a row, marked "error" -
+    // that one is a record of something that actually happened.
+    //
     // One endpoint for every plan type. Floor plans are read from their
     // printed dimensions; the rest are counted against uploaded symbol
     // references. The backend picks the path and prices both the same way.
-    estimateFromImage(file, planType ?? "Floor Plan")
-      .then((result) => updateProjectEstimate(projectId, result))
-      .then(() => {
+    (async () => {
+      try {
+        if (!created.current) {
+          created.current = (await createProject(draft)).id;
+        }
+        const id = created.current;
+
+        const result = await estimateFromImage(file, draft.planType);
+        await updateProjectEstimate(id, result);
+
         clearInterval(tick);
         setProgress(100);
         setStep(steps.length - 1);
-        setTimeout(() => navigate("/results", { state: { projectId } }), 500);
-      })
-      .catch(async (e) => {
+        setTimeout(() => navigate("/results", { state: { projectId: id } }), 500);
+      } catch (e) {
         clearInterval(tick);
         const message = e instanceof Error ? e.message : "Scan failed.";
         setError(message);
-        await markProjectError(projectId, message).catch(() => {});
-      });
+        if (created.current) {
+          await markProjectError(created.current, message).catch(() => {});
+        }
+      }
+    })();
 
     return () => clearInterval(tick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,7 +118,9 @@ export function ScanningScreen() {
           Check that the backend server is running at the address configured in VITE_SCAN_API_URL.
         </p>
         <button
-          onClick={() => navigate("/upload", { state: { projectId, planType } })}
+          onClick={() =>
+            navigate("/upload", { state: { draft, projectId: created.current } })
+          }
           className="h-9 px-4 rounded-lg border border-border text-[11px] font-mono tracking-[0.14em] uppercase press-scale hover:bg-accent"
         >
           Back to Upload
