@@ -50,9 +50,33 @@ def metres(lines, rule: str, item_id: str | None = None) -> float:
 # --- the allowances exist and are bounded -------------------------------
 
 def test_the_allowances_have_defaults():
-    assert DEFAULTS.wire_m_per_device == 12.0
+    """Wire is 20, not the 12 it shipped as.
+
+    12 m assumes two conductors in the conduit. PEC Part 1 (2017) Art. 2.50
+    requires an equipment grounding conductor on every branch circuit
+    feeding a grounding-type receptacle, so three share it:
+
+        6 m conduit x 3 conductors  = 18 m
+        Art. 3.00.14 free conductor ~  1.5 m across the boxes
+                                      ~20 m
+
+    An estimate built on 12 m was about 40% short on its largest line.
+    """
+    assert DEFAULTS.wire_m_per_device == 20.0
     assert DEFAULTS.conduit_m_per_device == 6.0
     assert DEFAULTS.main_run_m_per_fixture == 1.5
+
+
+def test_wire_is_conduit_times_three_conductors_plus_splices():
+    """The relationship is the point, not the two numbers separately.
+
+    Change the conduit run and the wire has to follow it, or the pair stops
+    describing a real circuit.
+    """
+    three_conductors = DEFAULTS.conduit_m_per_device * 3
+    splices = DEFAULTS.wire_m_per_device - three_conductors
+    assert three_conductors == 18.0
+    assert 1.0 <= splices <= 2.5, "splice allowance outside Art. 3.00.14 practice"
 
 
 def test_an_allowance_cannot_be_negative():
@@ -102,10 +126,10 @@ def test_gauge_follows_what_the_device_is_for():
              if li.rule == "electrical.conductor_from_count"]
     by_item = {li.item_id: li for li in lines}
     assert set(by_item) == {"ELW05", "ELW04"}
-    # 13 ceiling outlets at 12 m + 10% waste
-    assert by_item["ELW05"].quantity == pytest.approx(13 * 12.0 * 1.10)
-    # 8 wall outlets at 12 m + 10% waste
-    assert by_item["ELW04"].quantity == pytest.approx(8 * 12.0 * 1.10)
+    # 13 ceiling outlets at 20 m + 10% waste
+    assert by_item["ELW05"].quantity == pytest.approx(13 * 20.0 * 1.10)
+    # 8 wall outlets at 20 m + 10% waste
+    assert by_item["ELW04"].quantity == pytest.approx(8 * 20.0 * 1.10)
 
 
 def test_conduit_covers_every_device_regardless_of_gauge():
@@ -205,6 +229,15 @@ def test_the_electrical_allowance_is_declared():
             if "derived from the device count" in a]
     assert len(line) == 1
     assert "largest single cost" in line[0]
+
+
+def test_the_allowance_says_where_it_came_from():
+    """It is no longer mine, and a reader of the ledger should be able to
+    check it rather than take it on trust."""
+    line = next(a for a in DEFAULTS.assumption_lines({"electrical"})
+                if "derived from the device count" in a)
+    assert "PEC" in line
+    assert "not measurements of THIS building" in line
 
 
 def test_the_plumbing_main_run_is_declared():

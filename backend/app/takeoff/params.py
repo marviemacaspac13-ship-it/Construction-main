@@ -83,11 +83,40 @@ class EstimatingParams(BaseModel):
     # Configured once per project, never asked at scan time - the same shape
     # as the wall height and waste allowances above.
     #
-    # They are also the most expensive guesses in the engine. No guide covers
-    # electrical or plumbing, so they are mine, and Guide.docx corrected the
-    # column section by a factor of two. Every line they produce says so.
-    wire_m_per_device: float = Field(12.0, ge=0, le=100)
+    # These began as my own guesses, and were checked in Sep 2026 against
+    # Philippine estimating practice - Fajardo, "Electrical Layout and
+    # Estimate" and "Simplified Construction Estimate"; PEC Part 1 (2017);
+    # NBCP (P.D. 1096). Three of the four survived. One did not.
+    #
+    # WIRE was 12.0 and is badly wrong at that. 12 m assumes a two-wire
+    # circuit, but PEC Art. 2.50 mandates an equipment grounding conductor
+    # on every branch circuit feeding a grounding-type receptacle, so three
+    # conductors share the conduit, not two:
+    #
+    #     6.0 m conduit x 3 conductors            = 18.0 m
+    #     Art. 3.00.14 free conductor, 150 mm     ~  1.5 m over the boxes
+    #                                               ------
+    #                                               ~20.0 m
+    #
+    # At 12 m an electrical estimate came out ~40% short on its largest
+    # line. This is the second constant an outside source has corrected by
+    # a wide margin, after Guide.docx doubled the column section.
+    wire_m_per_device: float = Field(20.0, ge=0, le=100)
+
+    # CONDUIT holds at 6.0, and the derivation is worth keeping because it
+    # explains the 20 above. NBCP Rule VIII sets a 2.70 m ceiling for a
+    # single-storey dwelling and trade practice sets an outlet 0.30 m above
+    # finished floor, so the drop is 2.40 m and the horizontal run to the
+    # ceiling junction box is ~3.60 m. That is 6.0 m - exactly two of the
+    # 3.0 m sticks PVC conduit is sold in here (Neltex, Emerald, Atlanta),
+    # which is what estimators actually budget.
     conduit_m_per_device: float = Field(6.0, ge=0, le=100)
+
+    # The plumbing allowances also held: a Philippine bathroom is compact
+    # (~1.5 x 2.0 m) with the main line just outside the wall or overhead,
+    # so a fixture branch stays inside one 3.0 m length. Published practice
+    # is 2.0-2.5 m supply and 1.5-2.5 m drain per fixture; the 2.0 m
+    # defaults below sit inside both.
     main_run_m_per_fixture: float = Field(1.5, ge=0, le=50)
 
     def tagged_assumptions(self) -> list[tuple[str, str]]:
@@ -132,8 +161,11 @@ class EstimatingParams(BaseModel):
                 f"Where no circuit routes are measured, wire and conduit are derived from the "
                 f"device count at {self.wire_m_per_device:g} m of conductor and "
                 f"{self.conduit_m_per_device:g} m of conduit per device. No plan states these "
-                f"lengths and no guide document covers electrical, so both are assumptions - "
-                f"and they are the largest single cost in the trade.",
+                f"lengths, so they are not measurements of THIS building - but they are not "
+                f"invented either: they follow Philippine practice (Fajardo; PEC Part 1 2017 "
+                f"Art. 2.50 and 3.00.14; NBCP Rule VIII), where a 6 m conduit run carries "
+                f"three conductors and the boxes take 150 mm of free wire each. Wire remains "
+                f"the largest single cost in the trade.",
             ),
             ("plumbing", f"Waste allowance: pipe {self.pipe_waste:.0%}."),
             (
@@ -141,8 +173,10 @@ class EstimatingParams(BaseModel):
                 f"Fixtures are counted but not priced - they are client-supplied. "
                 f"Each is allowed {self.drain_branch_m_per_fixture:g} m of drain and "
                 f"{self.supply_branch_m_per_fixture:g} m of supply pipe to reach its "
-                f"line, which is an assumption: no plan states it and no guide "
-                f"document covers plumbing.",
+                f"line. No plan states either, but both sit inside published "
+                f"Philippine practice for a compact bathroom - 2.0-2.5 m supply "
+                f"and 1.5-2.5 m drain per fixture (Fajardo, Plumbing Design and "
+                f"Estimate).",
             ),
             (
                 "plumbing",
