@@ -19,6 +19,9 @@ export function ProjectsScreen() {
   const navigate = useNavigate();
   const [search, setSearch]     = useState("");
   const [menu, setMenu]         = useState<string | null>(null);
+  // Deleting a project takes its estimate with it and Supabase keeps no
+  // copy, so the menu asks once rather than acting on the first click.
+  const [confirm, setConfirm]   = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
@@ -35,8 +38,10 @@ export function ProjectsScreen() {
 
   const filtered = projects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
 
+  const closeMenu = () => { setMenu(null); setConfirm(null); };
+
   const handleRemove = async (id: string) => {
-    setMenu(null);
+    closeMenu();
     setProjects((pp) => pp.filter((x) => x.id !== id)); // optimistic
     try {
       await deleteProject(id);
@@ -107,7 +112,16 @@ export function ProjectsScreen() {
             return (
               <div
                 key={p.id}
-                className="relative border border-border rounded-xl bg-card hover:bg-accent/40 hover-lift animate-stagger border-beam transition-colors p-6 flex flex-col min-h-[160px]"
+                /*
+                 * `border-beam` sets `isolation: isolate`, so the dropdown
+                 * below is sealed inside THIS card's stacking context and no
+                 * z-index on it can reach past a later sibling card. Raising
+                 * the whole card while its menu is open is what lets the menu
+                 * cover the card underneath.
+                 */
+                className={`relative border border-border rounded-xl bg-card hover:bg-accent/40 hover-lift animate-stagger border-beam transition-colors p-6 flex flex-col min-h-[160px] ${
+                  menu === p.id ? "z-30" : ""
+                }`}
                 style={{ animationDelay: `${i * 50}ms` }}
               >
                 <div className="border-beam-content flex flex-col flex-1">
@@ -133,7 +147,11 @@ export function ProjectsScreen() {
                       {new Date(p.created_at).toLocaleDateString()}
                     </span>
                     <button
-                      onClick={() => setMenu(menu === p.id ? null : p.id)}
+                      onClick={() => {
+                        setConfirm(null);
+                        setMenu(menu === p.id ? null : p.id);
+                      }}
+                      aria-label={`Actions for ${p.name}`}
                       className="text-muted-foreground hover:text-foreground press-scale"
                     >
                       <MoreVertical size={13} />
@@ -142,19 +160,41 @@ export function ProjectsScreen() {
                 </div>
 
                 {menu === p.id && (
-                  <div className="absolute top-full mt-1 right-4 w-28 bg-popover border border-border rounded-lg overflow-hidden z-10 shadow-lg animate-pop-in origin-top-right">
-                    <button
-                      onClick={() => handleRemove(p.id)}
-                      className="w-full text-left px-4 py-2.5 text-[11px] font-mono text-foreground hover:bg-accent border-b border-border transition-colors"
-                    >
-                      Remove
-                    </button>
-                    <button
-                      onClick={() => setMenu(null)}
-                      className="w-full text-left px-4 py-2.5 text-[11px] font-mono text-foreground hover:bg-accent transition-colors"
-                    >
-                      Close
-                    </button>
+                  <div className="absolute top-full mt-1 right-4 w-44 bg-popover border border-border rounded-lg overflow-hidden z-20 shadow-lg animate-pop-in origin-top-right">
+                    {confirm === p.id ? (
+                      <>
+                        <p className="px-4 pt-3 pb-2 text-[10px] font-mono text-muted-foreground leading-relaxed">
+                          Remove permanently? The estimate goes with it.
+                        </p>
+                        <button
+                          onClick={() => handleRemove(p.id)}
+                          className="w-full text-left px-4 py-2.5 text-[11px] font-mono text-red-400 hover:bg-red-950/40 border-t border-border transition-colors"
+                        >
+                          Yes, remove it
+                        </button>
+                        <button
+                          onClick={() => setConfirm(null)}
+                          className="w-full text-left px-4 py-2.5 text-[11px] font-mono text-foreground hover:bg-accent border-t border-border transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setConfirm(p.id)}
+                          className="w-full text-left px-4 py-2.5 text-[11px] font-mono text-foreground hover:bg-accent border-b border-border transition-colors"
+                        >
+                          Remove project
+                        </button>
+                        <button
+                          onClick={closeMenu}
+                          className="w-full text-left px-4 py-2.5 text-[11px] font-mono text-foreground hover:bg-accent transition-colors"
+                        >
+                          Close
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

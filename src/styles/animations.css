@@ -312,14 +312,25 @@ everything here rides on the existing theme tokens (--foreground,
   animation: borderBeamLeftRight 8s linear infinite;
 
   pointer-events: none;
-  z-index: 2;
-}
 
-
-/* Keep the actual card contents above the animated border */
-.border-beam > * {
-  position: relative;
-  z-index: 3;
+  /*
+   * Behind the content rather than in front of it.
+   *
+   * `isolation: isolate` on the card makes it a stacking context, so a
+   * negative z-index cannot escape behind the card - it paints after the
+   * card background and before every descendant, which is exactly where a
+   * border highlight belongs.
+   *
+   * This replaces a `.border-beam > * { position: relative }` rule that
+   * lifted the children above the beam instead. That rule broke any
+   * absolutely-positioned child: this stylesheet is UNLAYERED and Tailwind
+   * v4 puts its utilities in a cascade layer, and unlayered styles beat
+   * layered ones whatever their specificity or order - so it silently
+   * overrode `absolute`. The projects-card dropdown menu was laid out in
+   * normal flow underneath its card, where the next card painted over it,
+   * and clicking the three dots looked like it did nothing at all.
+   */
+  z-index: -1;
 }
 
 
