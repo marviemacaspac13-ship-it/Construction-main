@@ -301,6 +301,60 @@ def test_a_plumbing_plan_with_no_readable_tags_is_refused():
     assert "higher-resolution" in res.json()["detail"]["message"]
 
 
+def _plumbing_with(tags: dict):
+    """Post 07.png with the tag reader stubbed to a chosen count."""
+    with patch("app.main.read_tiled", return_value=[]),          patch("app.main.tally", return_value=tags):
+        with open(PLANS / "07.png", "rb") as fh:
+            return client.post(
+                "/api/estimate/image",
+                files={"file": ("07.png", fh.read(), "image/png")},
+                data={"plan_type": "Plumbing Plan"},
+            )
+
+
+def test_too_few_fixtures_is_refused_rather_than_priced():
+    """The plumbing half of MIN_DEVICES, missing until Sep 2026.
+
+    Two sample sheets were pricing a single stray tag at P1,744 apiece -
+    the "an empty result is never a real zero" failure wearing a small
+    non-zero number instead of a zero, which is harder to spot precisely
+    because a number looks like an answer.
+    """
+    res = _plumbing_with({"water_closet": 1})
+    assert res.status_code == 422
+    detail = res.json()["detail"]
+    assert "too few to be a whole sanitary layout" in detail["message"]
+    # The reader has to see what WAS read, or the refusal is unactionable.
+    assert any("water_closet" in w for w in detail["warnings"])
+
+
+def test_the_floor_counts_fixtures_not_tags():
+    """A cleanout implies no materials, so it cannot help clear the floor.
+
+    Two water closets and eight cleanouts is ten tags and two fixtures.
+    Counting tags would price a sheet that has nothing to price from.
+    """
+    res = _plumbing_with({"water_closet": 2, "cleanout": 8})
+    assert res.status_code == 422
+    assert "Only 2 plumbing fixtures" in res.json()["detail"]["message"]
+
+
+def test_the_smallest_real_layout_still_prices():
+    """A water closet, a lavatory and a floor drain - one CR, and genuine."""
+    res = _plumbing_with({"water_closet": 1, "lavatory": 1, "floor_drain": 1})
+    assert res.status_code == 200, res.text
+    assert res.json()["estimate"]["grand_total"] > 0
+
+
+def test_the_two_refusals_say_different_things():
+    """Nothing read at all, and something read but not enough, are different
+    problems for whoever is holding the drawing."""
+    nothing = _plumbing_with({}).json()["detail"]["message"]
+    too_few = _plumbing_with({"water_closet": 1}).json()["detail"]["message"]
+    assert "No fixture tags could be read" in nothing
+    assert "too few to be a whole sanitary layout" in too_few
+
+
 def test_an_unknown_plan_type_is_rejected():
     res = client.post(
         "/api/estimate/image",

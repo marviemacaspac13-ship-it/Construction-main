@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.vision.preprocess import preprocess_image
+from app.vision.relabel import relabel_from_adjacent_text
 from app.vision.template_match import match_templates
 from app.pricing import price_takeoff
 from app.schemas import ScanResponse
@@ -38,6 +39,36 @@ VALID_PLAN_TYPES = ("Floor Plan", "Electrical Plan", "Plumbing Plan")
 OCR_PLAN_TYPES = ("Floor Plan",)
 # Read by counting printed tags rather than by matching symbols.
 TAG_PLAN_TYPES = ("Plumbing Plan",)
+
+# The fewest material-bearing fixtures a real sanitary layout can carry: a
+# water closet, a lavatory and a floor drain. Below that the reader has
+# found a fragment, not a plan - measured across the sample sheets, the one
+# that reads gives 33 and the two that do not give 1 each, so the floor sits
+# in a wide gap rather than on a cliff.
+#
+# The trade-off is deliberate and worth knowing: a sheet drawn for a real
+# two-fixture powder room would now be refused. Refusing a small real plan
+# is recoverable - the message says why and names what was read. Pricing a
+# misread one is not, because nothing downstream can tell that P1,744 came
+# from a single stray tag.
+# OFF by default, and the measurement is why.
+#
+# Re-reading an electrical sheet as text to identify labelled symbols takes
+# a scan from ~4s to ~19s - the tiled read is 25 OCR passes - and buys, on
+# this corpus, exactly one rename: the single ACU on 05.png, worth P17 of a
+# P21,624 estimate. 0.08% for a 5x slowdown.
+#
+# There is no cheaper version. A 3x3 tile grid misses the ACU, 4x4 finds it
+# at 8s but sits right at the edge, and a crop around each detection works
+# only between 0.10 and 0.15 of the sheet and fails either side. Every
+# route is a narrow band on one sample.
+#
+# Set True where a drawing labels its symbol variants in quantity. The
+# machinery and its tests stay because the mechanism is correct and the
+# trap it avoids is worth not rediscovering - see app/vision/relabel.py.
+READ_SYMBOL_LABELS = False
+
+MIN_FIXTURES = 3
 
 # The fewest symbols a real electrical sheet can plausibly carry. The one
 # plan with a hand count has 35; the sheets that match nothing real return
@@ -182,16 +213,24 @@ def _read_plan(raw_bytes: bytes, plan_type: str):
         raise HTTPException(400, str(exc))
 
     if not extraction.rooms_m or extraction.envelope_w_m <= 0 or extraction.envelope_l_m <= 0:
-        raise HTTPException(
-            422,
-            {
-                "message": (
-                    "Could not read enough of the plan to estimate it. This path needs "
-                    "printed room dimensions and margin dimension chains."
-                ),
-                "warnings": extraction.warnings(),
-            },
-        )
+        # Name the cause where it is knowable. A sheet dimensioned in feet
+        # and inches cannot be read at all - the notation never parses into
+        # a dimension, which is why it fails safely - and telling someone
+        # only that the plan "could not be read" sends them looking for a
+        # better scan of a drawing that was never going to work.
+        if extraction.looks_imperial:
+            message = (
+                "This plan is dimensioned in feet and inches. TRACE reads metric "
+                "drawings - millimetres, centimetres or metres - and prices them "
+                "against a Philippine catalog, so an imperial plan cannot be "
+                "estimated. Nothing was guessed."
+            )
+        else:
+            message = (
+                "Could not read enough of the plan to estimate it. This path needs "
+                "printed room dimensions and margin dimension chains."
+            )
+        raise HTTPException(422, {"message": message, "warnings": extraction.warnings()})
 
     return to_plan_schema(extraction, plan_type), report_from_extraction(extraction)
 
@@ -239,10 +278,13 @@ def _read_plumbing(raw_bytes: bytes, plan_type: str):
 
     counts = tally(count_tags(read_tiled(image), FIXTURE_TAG_PATTERNS, image.shape))
 
-    # A cleanout implies no materials, so a plan where only cleanouts were
-    # read has produced nothing to price. Returning a cheerful zero there
-    # is the same trap the empty-library guard exists to close.
-    if not any(FIXTURE_PLUMBING.get(tag) for tag in counts):
+    # A cleanout implies no materials, so it does not count towards the
+    # floor below - a sheet where only cleanouts were read has produced
+    # nothing to price.
+    fixtures = sum(n for tag, n in counts.items() if FIXTURE_PLUMBING.get(tag))
+
+    # Nothing read at all. The same trap the empty-library guard closes.
+    if fixtures == 0:
         raise HTTPException(
             422,
             {
@@ -253,6 +295,30 @@ def _read_plumbing(raw_bytes: bytes, plan_type: str):
                     "same drawing usually reads."
                 ),
                 "warnings": [f"read: {dict(counts)}" if counts else "read: nothing"],
+            },
+        )
+
+    # Something read, but too little to be a whole layout. This is the
+    # plumbing half of MIN_DEVICES, and it was missing for as long as the
+    # electrical one existed: two sample sheets were pricing a single stray
+    # tag at P1,744 apiece, which is the "empty result is never a real zero"
+    # failure wearing a small non-zero number instead.
+    if fixtures < MIN_FIXTURES:
+        raise HTTPException(
+            422,
+            {
+                "message": (
+                    f"Only {fixtures} plumbing fixture"
+                    f"{'' if fixtures == 1 else 's'} could be read on this "
+                    f"plan, too few to be a whole sanitary layout. The tags "
+                    f"are probably drawn differently here, or are too small "
+                    f"to resolve - a higher-resolution export of the same "
+                    f"drawing usually reads."
+                ),
+                "warnings": [
+                    f"read: {dict(counts)}",
+                    f"{fixtures} fixtures imply materials, {MIN_FIXTURES} is the minimum to price",
+                ],
             },
         )
 
@@ -290,6 +356,32 @@ def _detect_plan(raw_bytes: bytes, plan_type: str):
         raise HTTPException(400, str(exc))
 
     detections = match_templates(image)
+
+    # A drawing puts the same circle on a general-purpose outlet and an AC
+    # outlet, and writes the difference beside it. Reading that word is the
+    # only way to tell them apart, so the sheet is read again as TEXT and
+    # any whitelisted word renames the symbol it sits next to.
+    #
+    # Read plain and tiled, for two separate reasons. Plain because the
+    # denoise in preprocess_image smooths small glyphs - good for shape
+    # matching, bad for a text detector. Tiled because a whole-page pass
+    # does not find the ACU at all (24 boxes, none of them it) while a 5x5
+    # tiled pass does. A crop around each detection was measured too: it
+    # works at 0.10 of the sheet and fails at both 0.06 and 0.20, a band too
+    # narrow to trust across images that run from 0.16 to 3.15 MP.
+    #
+    # It costs about 11s on a 0.32 MP sheet, which makes this the slowest
+    # path in the app. That is a real price for a small correction, and the
+    # reason it is worth paying is that a mislabelled symbol is wrong in a
+    # way no reviewer can see: the count is right, the total is plausible,
+    # and only the line item is false.
+    if READ_SYMBOL_LABELS:
+        plain = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if plain is not None:
+            detections = relabel_from_adjacent_text(
+                detections, read_tiled(plain), plain.shape
+            )
+
     plan = plan_from_detections(detections, plan_type)
 
     devices = sum(f.count for f in plan.fixtures)
