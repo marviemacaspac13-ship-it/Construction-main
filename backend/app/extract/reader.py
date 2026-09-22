@@ -23,7 +23,7 @@ import numpy as np
 
 from app.extract.chains import ABS_TOL_M, MM_PER_UNIT, tolerance_in_units
 from app.extract.ocr import DEDUPE_RADIUS, TextBox, merge_boxes, read_array, read_region
-from app.extract.units_infer import infer_units
+from app.extract.units_infer import infer_units, looks_imperial
 from app.extract.to_plan import PlanExtraction, extract_plan
 from app.extract.tokens import ROOM_DIM_RE, classify_tag
 
@@ -275,6 +275,7 @@ def _rooms(boxes: list[TextBox]) -> list[str]:
 
 def extraction_from_boxes(boxes: list[TextBox]) -> PlanExtraction:
     """The spatial pipeline, independent of where the boxes came from."""
+    imperial = looks_imperial([b.text for b in boxes])
     core = _core_bbox(boxes)
 
     banded: dict[str, list[TextBox]] = {"top": [], "bottom": [], "left": [], "right": []}
@@ -327,7 +328,12 @@ def extraction_from_boxes(boxes: list[TextBox]) -> PlanExtraction:
     length = next((bands[n].total for n in ("left", "right") if bands[n].total), 0.0)
 
     tags = [b.text for b in boxes if classify_tag(b.text) is not None]
-    return extract_plan(width, length, _rooms(boxes), chains, tags)
+    extraction = extract_plan(width, length, _rooms(boxes), chains, tags)
+    # Set here rather than threaded through extract_plan, which is also
+    # called with hand-transcribed input by the offline scripts and has no
+    # text to inspect.
+    extraction.looks_imperial = imperial
+    return extraction
 
 
 def read_plan(path: str) -> PlanExtraction:

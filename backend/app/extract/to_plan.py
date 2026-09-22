@@ -36,6 +36,12 @@ class PlanExtraction:
     # The structural frame is never read - see app.takeoff.frame. None means
     # no frame was derived at all, not a frame of zero volume.
     frame: FrameDerivation | None = None
+    # True when the sheet appears to be dimensioned in feet and inches.
+    # Never changes a reading - a plan that reads at all is metric, because
+    # imperial notation does not parse into a dimension. It exists so a
+    # refusal can say why rather than sending someone hunting for a better
+    # scan of a drawing that was never readable.
+    looks_imperial: bool = False
 
     @property
     def chain_confidence(self) -> float:

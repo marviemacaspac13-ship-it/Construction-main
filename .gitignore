@@ -33,3 +33,10 @@ Thumbs.db
 CLAUDE.md
 CHANGES.md
 docs/
+
+# Third-party house-plan corpus: 2,640 US marketing floor plans used only
+# by tests/test_imperial_plans.py, which skips cleanly when it is absent.
+# Not ours to redistribute, and far too large for the repo. The CSV beside
+# it is kept as the record of what the set was and where its ground truth
+# came from.
+backend/tests/fixtures/plans/Data Set/Floorplan/images/
