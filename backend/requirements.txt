@@ -1,10 +1,51 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-python-multipart>=0.0.9
-ultralytics>=8.3
-opencv-python-headless>=4.10
-pytesseract>=0.3.13
-pillow>=11.0
-numpy>=1.26
-supabase>=2.7
-python-dotenv>=1.0
+# TRACE backend - everything needed to run the API and its tests.
+#
+# Requires Python 3.13 (the version these pins were tested on; 393 tests
+# pass). Other Python versions may lack pre-built wheels for opencv, numpy
+# or onnxruntime and fail to install.
+#
+#   cd backend
+#   python -m venv .venv
+#   .venv\Scripts\python.exe -m pip install -r requirements.txt     (Windows)
+#   .venv/bin/python -m pip install -r requirements.txt              (macOS / Linux)
+#
+# Versions are pinned exactly to a known-working set, so a fresh machine
+# installs what was actually tested rather than whatever is newest.
+# Verified by installing into an empty environment and running the full
+# suite: 393 passed.
+#
+# WINDOWS - if pip fails with "No such file or directory ... numpy\f2py\..."
+# and a hint about "Long Path support", the project folder is too deep.
+# numpy ships files nested so deeply that the full path can pass Windows'
+# 260-character limit. Either move the project to a short folder such as
+# C:\trace, or enable long paths once (PowerShell as Administrator):
+#   New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+#     -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+# then delete the half-built .venv and install again.
+
+# --- web API -----------------------------------------------------------------
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32        # required by FastAPI for file uploads
+
+# --- reading plans -----------------------------------------------------------
+opencv-python-headless==5.0.0.93
+numpy==2.5.3
+rapidocr-onnxruntime==1.2.3     # the OCR engine; its models ship inside the wheel
+onnxruntime==1.29.0             # what rapidocr runs on
+
+# --- data --------------------------------------------------------------------
+supabase==2.31.0
+python-dotenv==1.2.3            # reads backend/.env
+pydantic==2.13.5
+
+# --- tests -------------------------------------------------------------------
+pytest==9.1.1
+httpx==0.28.1                   # needed by FastAPI's TestClient
+
+# NOT listed, deliberately:
+#   ultralytics  - pulls ~2.5 GB of PyTorch for app/training.py and
+#                  app/vision/detect.py, which nothing imports.
+#   pytesseract  - used only by app/vision/ocr.py, which nothing imports, and
+#                  it needs the separate Tesseract program installed as well.
+#   pillow       - never imported directly; rapidocr brings it in itself.
