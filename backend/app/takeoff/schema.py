@@ -27,10 +27,40 @@ ScaleSource = Literal[
 
 
 class Scale(BaseModel):
-    meters_per_pixel: float = Field(gt=0)
+    """How many metres one pixel covers - PER AXIS, and that is not fussiness.
+
+    These drawings are not isotropic. On `01.png` two independent methods
+    agree that the vertical scale is about 10% larger than the horizontal:
+
+        printed-label spacing   13.49 / 14.85 mm per pixel
+        building outline        13.23 / 14.97 mm per pixel
+
+    The sheet was rasterised about 10% wider than the building it depicts,
+    which is ordinary for a PDF fitted to a page. A single scalar therefore
+    cannot describe it: measuring with one would skew every length by up to
+    10% in one direction only - invisible, because the number would still
+    look plausible and nothing downstream cross-checks a measured length.
+
+    It already caused one wrong claim. Applying an x-fitted scalar to both
+    axes made a column measure 0.284 m square and the guide section look
+    confirmed to 1%; measured properly it is 0.284 x 0.322 and the guide is
+    14% out. See `tests/test_frame_against_drawings.py`.
+
+    **Anything measuring a diagonal needs both**, and area is the safest
+    quantity to derive - an x-error and a y-error multiply into an area but
+    compound awkwardly into a diagonal.
+    """
+
+    meters_per_pixel_x: float = Field(gt=0)
+    meters_per_pixel_y: float = Field(gt=0)
     confirmed_by_user: bool = False
     source: ScaleSource = "manual"
     confidence: float = Field(1.0, ge=0, le=1)
+
+    @property
+    def anisotropy(self) -> float:
+        """y over x. 1.0 is a square pixel; this corpus runs about 1.1."""
+        return self.meters_per_pixel_y / self.meters_per_pixel_x
 
 
 class Opening(BaseModel):
