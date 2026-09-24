@@ -60,14 +60,23 @@ class EstimatingParams(BaseModel):
     windows_per_room: float = Field(1.0, ge=0)
 
     # Structural frame, from Guide.docx. The sections, bar sizes and tie
-    # count are the project standard rather than an assumption now; what
-    # stays assumed is only where the frame SITS - how many columns, how
-    # they are spaced, and the footing thickness, none of which the guide
-    # states.
+    # count are the project standard; footing and slab thickness are sourced
+    # standards too (below). What stays genuinely assumed is only the LAYOUT
+    # - how many columns and how they are spaced, and whether a perimeter
+    # tie beam runs round the envelope - none of which any source states.
     include_frame: bool = True
     column_spacing_m: float = Field(3.5, gt=0, le=12)
-    # GUIDE SILENT: footing plan size comes from the bar cut length, but its
-    # thickness is never given. Still an assumption.
+    # FROM THE NSCP, supplied by the owner in Sep 2026: 200 mm for a
+    # bungalow footing. Guide.docx gives footing plan size (from the bar cut
+    # length) but never its thickness, so this was labelled an assumption
+    # until then - the value was already right, only its source was missing.
+    #
+    # TO VERIFY: NSCP 2015 follows ACI 318, whose footing rule is a minimum
+    # 150 mm of concrete ABOVE the bottom reinforcement rather than an
+    # overall thickness. With the guide's 75 mm footing cover and a 16 mm
+    # bar that implies roughly 240-250 mm overall. If a structural reference
+    # confirms that reading, this becomes 0.25 and every floor plan rises
+    # about 1.5%.
     footing_thickness_m: float = Field(0.20, gt=0, le=2)
     # FROM Guide.docx: its standard slab is 5 x 5 m at 100 mm (the bill in
     # tests/takeoff/test_guide_bills.py). The most sensitive value in a
@@ -212,10 +221,15 @@ class EstimatingParams(BaseModel):
                 (
                     "structural",
                     f"Where the frame SITS is still assumed: columns at "
-                    f"{self.column_spacing_m:g} m o.c. round the envelope, "
-                    f"{self.footing_thickness_m:g} m footing thickness, a "
-                    f"{self.slab_thickness_m:g} m slab on grade"
+                    f"{self.column_spacing_m:g} m o.c. round the envelope"
                     + (", and a perimeter tie beam." if self.include_perimeter_beam else "."),
+                ),
+                (
+                    "structural",
+                    f"Footing and slab thickness are standards, not readings - a floor plan "
+                    f"shows neither: {self.footing_thickness_m:g} m footings per the NSCP for a "
+                    f"bungalow, and a {self.slab_thickness_m:g} m slab on grade per the "
+                    f"Guide.docx standard slab (5 x 5 m at 100 mm).",
                 ),
                 (
                     "structural",

@@ -1,10 +1,11 @@
 """Where the frame sits, which is the part the guide does not state.
 
 Sections, bar sizes and the tie count come from Guide.docx and are pinned
-in test_guide_bills.py. What is still inferred is the LAYOUT - how many
-columns, how they are spaced, the footing thickness, whether a perimeter
-beam exists - and that is what this file covers, along with the frame
-never passing itself off as measured.
+in test_guide_bills.py; footing thickness comes from the NSCP and slab
+thickness from the guide's standard slab. What is still inferred is the
+LAYOUT - how many columns, how they are spaced, whether a perimeter beam
+exists - and that is what this file covers, along with the frame never
+passing itself off as measured.
 """
 
 import json
@@ -155,6 +156,27 @@ def test_the_layout_is_stated_separately_as_still_assumed():
     line = [a for a in DEFAULTS.assumption_lines() if "still assumed" in a]
     assert len(line) == 1
     assert "3.5 m o.c." in line[0]
+
+
+def test_footing_and_slab_thickness_are_stated_as_standards_not_assumptions():
+    """Sourced values get their own line, naming the source.
+
+    Footing thickness sat in the "still assumed" line until Sep 2026 even
+    though 200 mm is the NSCP figure for a bungalow; slab thickness sat
+    there too, though 100 mm is the guide's standard slab. Listing a sourced
+    value as an assumption undersells it exactly as listing an assumption as
+    sourced oversells it.
+    """
+    assert DEFAULTS.footing_thickness_m == 0.20
+    assert DEFAULTS.slab_thickness_m == 0.10
+
+    sourced = [a for a in DEFAULTS.assumption_lines() if "are standards, not readings" in a]
+    assert len(sourced) == 1
+    assert "NSCP" in sourced[0] and "Guide.docx" in sourced[0]
+    assert "still assumed" not in sourced[0]
+
+    assumed = next(a for a in DEFAULTS.assumption_lines() if "still assumed" in a)
+    assert "footing" not in assumed and "slab" not in assumed
 
 
 def test_no_frame_states_no_frame_assumption():
