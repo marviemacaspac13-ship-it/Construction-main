@@ -202,7 +202,10 @@ def test_real_plan_image_prices_end_to_end():
     assert any("Concrete is assumed, not read" in w for w in ex["warnings"])
 
     est = body["estimate"]
-    assert est["grand_total"] == pytest.approx(308356.26, abs=0.01)
+    # 308,356.26 until Sep 2026, when the default wall height moved from an
+    # unsourced 3.0 m to the Guide.docx standard wall's 2.70 m. Only the
+    # block and mortar lines move; the frame and wall length above do not.
+    assert est["grand_total"] == pytest.approx(300006.96, abs=0.01)
     assert est["unpriced"] == []
     assert {li["item_id"] for li in est["line_items"]} >= {
         "CHB01", "CHB02", "CMT01", "SND02", "DB01", "GI01",

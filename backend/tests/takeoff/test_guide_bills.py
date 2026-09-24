@@ -193,6 +193,17 @@ def test_wall_blocks(catalog):
     assert next(li.quantity for li in priced.line_items if li.item_id == "CHB02") == 178
 
 
+def test_the_default_wall_height_is_the_guide_wall():
+    """A floor plan never states wall height, so the default IS the estimate.
+
+    It was an unsourced 3.0 m until Sep 2026 while this bill said 2.70, and
+    every floor-plan estimate carried the difference - about 2.6%. Tying the
+    default to the bill means changing one without the other fails here.
+    """
+    guide_wall = WALL_PLAN.walls[0]
+    assert EstimatingParams().default_wall_height_m == guide_wall.height_m == 2.7
+
+
 def test_wall_mortar():
     """Guide: 2.86 bags of cement and 0.11 m3 of sand for the same wall."""
     lines = bom(WALL_PLAN)

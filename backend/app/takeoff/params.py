@@ -22,7 +22,15 @@ from app.takeoff.constants import (
 
 class EstimatingParams(BaseModel):
     # Geometry fallbacks
-    default_wall_height_m: float = Field(3.0, gt=0, le=10)
+    #
+    # FROM Guide.docx: its standard wall is 5.00 x 2.70 m of 6-inch CHB,
+    # pinned in tests/takeoff/test_guide_bills.py. This was 3.0 until Sep
+    # 2026 with no source at all - the same height the guide's columns
+    # contradict (2.7432 m) - and it inflated every floor-plan estimate by
+    # about 2.6%, which is as much as measuring the true building outline
+    # was ever going to recover. Floor plans do not state wall height, so
+    # the project standard is the right fallback, not a round number.
+    default_wall_height_m: float = Field(2.7, gt=0, le=10)
 
     # Waste allowances, as a fraction added on top of net quantity
     chb_waste: float = Field(0.05, ge=0, lt=1)
@@ -61,6 +69,10 @@ class EstimatingParams(BaseModel):
     # GUIDE SILENT: footing plan size comes from the bar cut length, but its
     # thickness is never given. Still an assumption.
     footing_thickness_m: float = Field(0.20, gt=0, le=2)
+    # FROM Guide.docx: its standard slab is 5 x 5 m at 100 mm (the bill in
+    # tests/takeoff/test_guide_bills.py). The most sensitive value in a
+    # floor-plan estimate - each 25 mm moves the total about 6% - and not
+    # on any floor plan, so the project standard is what stands in for it.
     slab_thickness_m: float = Field(0.10, ge=0, le=1)
     # A perimeter tie beam. The guide specifies beams in full but says
     # nothing about where they run, so running one round the envelope is
@@ -130,7 +142,8 @@ class EstimatingParams(BaseModel):
         lines: list[tuple[str, str]] = [
             (
                 "structural",
-                f"Wall height defaults to {self.default_wall_height_m} m where not specified.",
+                f"Wall height defaults to {self.default_wall_height_m:g} m where not specified - "
+                f"the Guide.docx standard wall (5.00 x 2.70 m); floor plans do not state it.",
             ),
             (
                 "structural",
