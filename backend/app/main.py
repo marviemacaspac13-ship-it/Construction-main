@@ -143,7 +143,12 @@ async def upload_template(item_id: str = Form(...), file: UploadFile = File(...)
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
 
     raw_bytes = await file.read()
-    filename = templates_store.save_template(item_id, raw_bytes, file.filename or "template.png")
+    try:
+        filename = templates_store.save_template(
+            item_id, raw_bytes, file.filename or "template.png"
+        )
+    except templates_store.UnsafeTemplatePath as exc:
+        raise HTTPException(400, str(exc))
     return {"item_id": item_id, "filename": filename}
 
 
@@ -153,7 +158,12 @@ def get_templates():
 
 @app.delete("/api/templates/{item_id}/{filename}")
 def remove_template(item_id: str, filename: str):
-    deleted = templates_store.delete_template(item_id, filename)
+    # The store refuses any name that is not a plain single segment, so a
+    # crafted path cannot reach a file outside the template directory.
+    try:
+        deleted = templates_store.delete_template(item_id, filename)
+    except templates_store.UnsafeTemplatePath as exc:
+        raise HTTPException(400, str(exc))
     if not deleted:
         raise HTTPException(404, "Template not found.")
     return {"deleted": True}
