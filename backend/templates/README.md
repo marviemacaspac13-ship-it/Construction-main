@@ -51,6 +51,15 @@ orientation needs its own reference.
 
 ## What cannot go here
 
+- **Plumbing fixture symbols.** Tried 25 Sep 2026 with the LAV (both styles), WC, UR and KS
+  symbols from a sanitary legend (E.H. Sison Engineers, sheet P-01), each in 4 rotations,
+  mirrored, at two sizes, on all five plumbing samples. At 0.66 they return 88-291 "water
+  closets" per sheet against 1-13 real ones. Lowering the bar is no help either: on
+  `Plumbingplan/04.png` the six strongest WC matches are dimension tick marks and the six
+  strongest KS matches are columns, with no real toilet among them. A fixture is a large,
+  curved outline, and a plan is full of curves and squares - unlike the outlet circle, it
+  has no feature that is rare on a drawing. The plumbing path reads labels instead
+  (`app/extract/tags.py`), and nothing routes a plumbing plan through this library.
 - **Switches.** On `05.png` they are lettered `S`, `S2`, `S3`, `S3w` — text, not a glyph.
   There is nothing to crop, so they need tag counting rather than template matching.
 - **`UTB01` and `JCB01`.** Both *do* have standard symbols — a plain square and a square
