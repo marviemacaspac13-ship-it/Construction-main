@@ -9,9 +9,9 @@
 -- if any step fails - most likely the owner email below matching no account -
 -- nothing is changed.
 --
--- BEFORE RUNNING: set the email on the marked line. Projects created before
--- this migration have no recorded owner, and all of them are given to that
--- account. It must be an existing account (Authentication > Users).
+-- Projects created before this migration have no recorded owner. All of them
+-- go to asd123@gmail.com, chosen by the owner on 25 Sep 2026; every other
+-- account starts with none.
 
 BEGIN;
 
@@ -24,7 +24,7 @@ ALTER TABLE public.projects
 
 -- 2. Give the existing projects an owner.
 UPDATE public.projects
-SET user_id = (SELECT id FROM auth.users WHERE email = 'OWNER@EXAMPLE.COM')  -- <<< SET THIS
+SET user_id = (SELECT id FROM auth.users WHERE email = 'asd123@gmail.com')  -- chosen by the owner, 25 Sep 2026
 WHERE user_id IS NULL;
 
 -- Fails, and rolls everything back, if the email above matched no account.
