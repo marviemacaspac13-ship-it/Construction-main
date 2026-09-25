@@ -198,14 +198,15 @@ def test_real_plan_image_prices_end_to_end():
 
     # Concrete is derived from the envelope, never read, and says so.
     assert ex["column_count"] == 15
-    assert ex["concrete_volume_m3"] == pytest.approx(26.66, abs=0.01)
+    assert ex["concrete_volume_m3"] == pytest.approx(27.65, abs=0.01)
     assert any("Concrete is assumed, not read" in w for w in ex["warnings"])
 
     est = body["estimate"]
-    # 308,356.26 until Sep 2026, when the default wall height moved from an
-    # unsourced 3.0 m to the Guide.docx standard wall's 2.70 m. Only the
-    # block and mortar lines move; the frame and wall length above do not.
-    assert est["grand_total"] == pytest.approx(300006.96, abs=0.01)
+    # 308,356.26 until 24 Sep 2026, when the default wall height moved from
+    # an unsourced 3.0 m to the Guide.docx standard wall's 2.70 m (300,006.96).
+    # Then 25 Sep: footings 0.20 -> 0.25 m, the NSCP's 150 mm read as depth
+    # above the bars rather than overall - +1.6%, footing concrete only.
+    assert est["grand_total"] == pytest.approx(304787.34, abs=0.01)
     assert est["unpriced"] == []
     assert {li["item_id"] for li in est["line_items"]} >= {
         "CHB01", "CHB02", "CMT01", "SND02", "DB01", "GI01",

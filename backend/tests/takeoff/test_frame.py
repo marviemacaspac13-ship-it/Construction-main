@@ -62,14 +62,14 @@ def test_volumes_follow_the_guide_sections():
     assert frame.column_count == 15
     # 15 columns x 0.20 x 0.40 x 2.7432 m
     assert frame.column_volume_m3 == pytest.approx(3.29184)
-    # 15 footings x 1.15 x 1.15 x 0.20
-    assert frame.footing_volume_m3 == pytest.approx(3.9675)
+    # 15 footings x 1.15 x 1.15 x 0.25
+    assert frame.footing_volume_m3 == pytest.approx(4.959375)
     # 50 m of perimeter tie beam x 0.20 x 0.40
     assert frame.beam_length_m == pytest.approx(50.0)
     assert frame.beam_volume_m3 == pytest.approx(4.0)
     # 14 x 11 x 0.10 slab on grade
     assert frame.slab_volume_m3 == pytest.approx(15.40)
-    assert frame.total_volume_m3 == pytest.approx(26.65934)
+    assert frame.total_volume_m3 == pytest.approx(27.651215)
 
 
 def test_the_section_is_the_guide_section_not_a_parameter():
@@ -162,12 +162,13 @@ def test_footing_and_slab_thickness_are_stated_as_standards_not_assumptions():
     """Sourced values get their own line, naming the source.
 
     Footing thickness sat in the "still assumed" line until Sep 2026 even
-    though 200 mm is the NSCP figure for a bungalow; slab thickness sat
+    though the NSCP sets it (250 mm overall: 150 mm above the bars, plus
+    the bars and their cover); slab thickness sat
     there too, though 100 mm is the guide's standard slab. Listing a sourced
     value as an assumption undersells it exactly as listing an assumption as
     sourced oversells it.
     """
-    assert DEFAULTS.footing_thickness_m == 0.20
+    assert DEFAULTS.footing_thickness_m == 0.25
     assert DEFAULTS.slab_thickness_m == 0.10
 
     sourced = [a for a in DEFAULTS.assumption_lines() if "are standards, not readings" in a]

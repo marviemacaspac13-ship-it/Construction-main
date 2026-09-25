@@ -65,19 +65,30 @@ class EstimatingParams(BaseModel):
     # - how many columns and how they are spaced, and whether a perimeter
     # tie beam runs round the envelope - none of which any source states.
     include_frame: bool = True
+    # Checked against the drawings on 25 Sep 2026. The two CAD plans draw
+    # their columns as solid squares: 01.png has 16, 03.png has 10, 26 in
+    # all. 3.5 m round each envelope gives 15 + 13 = 28 - two over, i.e.
+    # slightly generous. The 6-8 m bay a commercial grid uses (Salvan) would
+    # give 17, a third too few, so it does not carry to a bungalow. 3.6 m
+    # would match these two exactly, but two sheets are not grounds to tune
+    # it; counting the drawn columns is the real fix where they are drawn.
     column_spacing_m: float = Field(3.5, gt=0, le=12)
-    # FROM THE NSCP, supplied by the owner in Sep 2026: 200 mm for a
-    # bungalow footing. Guide.docx gives footing plan size (from the bar cut
-    # length) but never its thickness, so this was labelled an assumption
-    # until then - the value was already right, only its source was missing.
+    # FROM THE NSCP 2015 (following ACI 318), confirmed by the owner on
+    # 25 Sep 2026: a spread footing needs at least 150 mm of concrete ABOVE
+    # its bottom reinforcement - a depth over the bars, not an overall
+    # thickness. Overall is therefore that 150 mm plus the bars plus the
+    # cover beneath them:
     #
-    # TO VERIFY: NSCP 2015 follows ACI 318, whose footing rule is a minimum
-    # 150 mm of concrete ABOVE the bottom reinforcement rather than an
-    # overall thickness. With the guide's 75 mm footing cover and a 16 mm
-    # bar that implies roughly 240-250 mm overall. If a structural reference
-    # confirms that reading, this becomes 0.25 and every floor plan rises
-    # about 1.5%.
-    footing_thickness_m: float = Field(0.20, gt=0, le=2)
+    #     75 mm cover (CONCRETE_COVER_M["footing"], cast against earth)
+    #   + 32 mm       (the guide's 16 mm mat, one layer each way)
+    #   + 150 mm      (NSCP minimum above the bars)
+    #   = 257 mm, drafted as 250 mm
+    #
+    # It was 0.20 until then, from reading the NSCP figure as a total; that
+    # left only ~93 mm above the bars and understated every footing by 20%.
+    # Guide.docx gives footing plan size (from the bar cut length) but
+    # never its thickness.
+    footing_thickness_m: float = Field(0.25, gt=0, le=2)
     # FROM Guide.docx: its standard slab is 5 x 5 m at 100 mm (the bill in
     # tests/takeoff/test_guide_bills.py). The most sensitive value in a
     # floor-plan estimate - each 25 mm moves the total about 6% - and not
@@ -227,8 +238,8 @@ class EstimatingParams(BaseModel):
                 (
                     "structural",
                     f"Footing and slab thickness are standards, not readings - a floor plan "
-                    f"shows neither: {self.footing_thickness_m:g} m footings per the NSCP for a "
-                    f"bungalow, and a {self.slab_thickness_m:g} m slab on grade per the "
+                    f"shows neither: {self.footing_thickness_m:g} m footings per the NSCP (150 mm "
+                    f"above the bars, plus the bars and 75 mm cover), and a {self.slab_thickness_m:g} m slab on grade per the "
                     f"Guide.docx standard slab (5 x 5 m at 100 mm).",
                 ),
                 (
