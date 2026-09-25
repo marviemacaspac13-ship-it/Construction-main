@@ -1,3 +1,4 @@
+import { authHeaders } from "./supabase";
 declare global {
   interface ImportMetaEnv {
     readonly VITE_SCAN_API_URL?: string;
@@ -38,6 +39,7 @@ export async function scanPlan(file: File): Promise<ScanResult> {
 
   const res = await fetch(`${SCAN_API_URL}/api/scan`, {
     method: "POST",
+    headers: await authHeaders(),
     body: form,
   });
 

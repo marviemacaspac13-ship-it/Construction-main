@@ -10,3 +10,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+/**
+ * The signed-in session's token, for calls to the FastAPI backend.
+ *
+ * The backend refuses every /api route without one (backend/app/auth.py),
+ * so every fetch there goes through this. Empty when signed out - the
+ * backend then answers 401, which is the honest result.
+ */
+export async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}

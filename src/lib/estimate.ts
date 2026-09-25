@@ -1,3 +1,4 @@
+import { authHeaders } from "./supabase";
 /**
  * Client for the backend's OCR estimating path (POST /api/estimate/image).
  *
@@ -118,6 +119,7 @@ export async function estimateFromImage(
 
   const res = await fetch(`${API_URL}/api/estimate/image`, {
     method: "POST",
+    headers: await authHeaders(),
     body: form,
   });
 

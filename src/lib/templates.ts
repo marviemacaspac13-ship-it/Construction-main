@@ -1,3 +1,4 @@
+import { authHeaders } from "./supabase";
 declare global {
   interface ImportMetaEnv {
     readonly VITE_SCAN_API_URL?: string;
@@ -18,7 +19,7 @@ export type MaterialCatalogItem = {
 };
 
 export async function listMaterials(): Promise<MaterialCatalogItem[]> {
-  const res = await fetch(`${API_URL}/api/materials`);
+  const res = await fetch(`${API_URL}/api/materials`, { headers: await authHeaders() });
   if (!res.ok) throw new Error(`Failed to load materials (${res.status})`);
   return res.json();
 }
@@ -26,7 +27,7 @@ export async function listMaterials(): Promise<MaterialCatalogItem[]> {
 export type TemplateLibrary = Record<string, string[]>; // item_id -> [filenames]
 
 export async function listTemplates(): Promise<TemplateLibrary> {
-  const res = await fetch(`${API_URL}/api/templates`);
+  const res = await fetch(`${API_URL}/api/templates`, { headers: await authHeaders() });
   if (!res.ok) throw new Error(`Failed to load templates (${res.status})`);
   return res.json();
 }
@@ -35,7 +36,7 @@ export async function uploadTemplate(itemId: string, file: File): Promise<void> 
   const form = new FormData();
   form.append("item_id", itemId);
   form.append("file", file);
-  const res = await fetch(`${API_URL}/api/templates`, { method: "POST", body: form });
+  const res = await fetch(`${API_URL}/api/templates`, { method: "POST", headers: await authHeaders(), body: form });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(body || `Upload failed (${res.status})`);
@@ -45,6 +46,7 @@ export async function uploadTemplate(itemId: string, file: File): Promise<void> 
 export async function deleteTemplate(itemId: string, filename: string): Promise<void> {
   const res = await fetch(`${API_URL}/api/templates/${encodeURIComponent(itemId)}/${encodeURIComponent(filename)}`, {
     method: "DELETE",
+    headers: await authHeaders(),
   });
   if (!res.ok) throw new Error(`Delete failed (${res.status})`);
 }

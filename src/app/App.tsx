@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, Outlet } from "react-router";
 import { AppShell } from "./components/AppShell";
+import { RequireAuth } from "./components/RequireAuth";
 import { SignInScreen } from "./screens/SignInScreen";
 import { SignUpScreen } from "./screens/SignUpScreen";
 import { DashboardScreen } from "./screens/DashboardScreen";
@@ -18,9 +19,11 @@ import { SymbolLibraryScreen } from "./screens/SymbolLibraryScreen";
 
 function AppLayout() {
   return (
-    <AppShell>
-      <Outlet />
-    </AppShell>
+    <RequireAuth>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </RequireAuth>
   );
 }
 
@@ -32,7 +35,7 @@ export default function App() {
       <Route path="/sign-in" element={<SignInScreen />} />
       <Route path="/sign-up" element={<SignUpScreen />} />
 
-      <Route path="/results" element={<ResultsScreen />} />
+      <Route path="/results" element={<RequireAuth><ResultsScreen /></RequireAuth>} />
 
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<DashboardScreen />} />

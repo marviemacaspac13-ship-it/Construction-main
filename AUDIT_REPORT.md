@@ -413,7 +413,7 @@ Combined with AUTH-03, a signed-out user sees a working-looking but empty app ra
 | | Fix | Depends on |
 | --- | --- | --- |
 | 1 | ~~**API-01** path traversal — containment check in `delete_template`~~ **DONE 24 Sep** | — |
-| 2 | **AUTH-02** logout calls `signOut()` | — |
+| 2 | ~~**AUTH-02** logout calls `signOut()`~~ **DONE 25 Sep** (coworker merge) | — |
 
 Both are small and both are currently exploitable by anyone on the network.
 
@@ -430,10 +430,10 @@ Both are small and both are currently exploitable by anyone on the network.
 
 | | Fix | Depends on |
 | --- | --- | --- |
-| 7 | **AUTH-01** `user_id` column + RLS policies | decision in §6.1 |
-| 8 | **AUTH-03** route guard | 7 |
+| 7 | **AUTH-01** `user_id` column + RLS policies — **migration 002 written 25 Sep; applies when run in Supabase** | decided: users must not see each other's projects |
+| 8 | ~~**AUTH-03** route guard~~ **DONE 25 Sep** | 7 |
 | 9 | **AUTH-04** real identity in header and profile | 8 |
-| 10 | **API-02** verify the Supabase JWT in FastAPI | 7 |
+| 10 | ~~**API-02** verify the Supabase JWT in FastAPI~~ **DONE 25 Sep** | 7 |
 | 11 | **API-03/04** CORS from env, upload cap | 10 |
 
 ### Phase 3 — workflow integrity *(2–3 days)*

@@ -5,7 +5,7 @@ import traceback
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -16,6 +16,7 @@ from app.pricing import price_takeoff
 from app.schemas import ScanResponse
 from app.materials import load_catalog
 from app import audit, templates_store
+from app.auth import current_user
 from app.extract.tags import count_tags, read_tiled, tally
 from app.takeoff.constants import FIXTURE_PLUMBING, FIXTURE_TAG_PATTERNS
 from app.takeoff.schema import PlanSchema
@@ -85,6 +86,9 @@ class EstimateRequest(BaseModel):
 
 app = FastAPI(title="TRACE Detection API")
 
+# Every route but /health needs a signed-in user - see app/auth.py.
+SIGNED_IN = [Depends(current_user)]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -108,7 +112,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/api/scan", response_model=ScanResponse)
+@app.post("/api/scan", response_model=ScanResponse, dependencies=SIGNED_IN)
 async def scan_plan(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
@@ -130,11 +134,11 @@ async def scan_plan(file: UploadFile = File(...)):
     detections = match_templates(image)
     return price_takeoff(detections)
 
-@app.get("/api/materials")
+@app.get("/api/materials", dependencies=SIGNED_IN)
 def list_materials():
     return list(load_catalog().values())
 
-@app.post("/api/templates")
+@app.post("/api/templates", dependencies=SIGNED_IN)
 async def upload_template(item_id: str = Form(...), file: UploadFile = File(...)):
     catalog = load_catalog()
     if item_id not in catalog:
@@ -152,11 +156,11 @@ async def upload_template(item_id: str = Form(...), file: UploadFile = File(...)
     return {"item_id": item_id, "filename": filename}
 
 
-@app.get("/api/templates")
+@app.get("/api/templates", dependencies=SIGNED_IN)
 def get_templates():
     return templates_store.list_templates()
 
-@app.delete("/api/templates/{item_id}/{filename}")
+@app.delete("/api/templates/{item_id}/{filename}", dependencies=SIGNED_IN)
 def remove_template(item_id: str, filename: str):
     # The store refuses any name that is not a plain single segment, so a
     # crafted path cannot reach a file outside the template directory.
@@ -168,7 +172,7 @@ def remove_template(item_id: str, filename: str):
         raise HTTPException(404, "Template not found.")
     return {"deleted": True}
 
-@app.post("/api/estimate", response_model=EstimateResponse)
+@app.post("/api/estimate", response_model=EstimateResponse, dependencies=SIGNED_IN)
 def estimate(request: EstimateRequest):
     """Price an already-structured plan description.
 
@@ -178,7 +182,7 @@ def estimate(request: EstimateRequest):
     return estimate_plan(request.plan, load_catalog(), request.params)
 
 
-@app.post("/api/estimate/image", response_model=ImageEstimateResponse)
+@app.post("/api/estimate/image", response_model=ImageEstimateResponse, dependencies=SIGNED_IN)
 async def estimate_image(
     file: UploadFile = File(...),
     plan_type: str = Form("Floor Plan"),
