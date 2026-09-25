@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Btn, Mono } from "../components/ui";
 import { getProject, type Project } from "../../lib/projects";
-import { confidenceLabel, type ExtractionReport, type PricedLine } from "../../lib/estimate";
+import type { PricedLine } from "../../lib/estimate";
 
 const peso = (n: number) =>
   `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -35,91 +35,6 @@ function StatCard({ icon, label, value }: { icon: ReactNode; label: string; valu
   );
 }
 
-function ReadQuality({ extraction }: { extraction: ExtractionReport }) {
-  const label = confidenceLabel(extraction.confidence);
-  const tone =
-    label === "High"
-      ? "border-emerald-800 text-emerald-400 bg-emerald-950/30"
-      : label === "Medium"
-      ? "border-amber-800 text-amber-400 bg-amber-950/30"
-      : "border-red-800 text-red-400 bg-red-950/30";
-
-  const chainsOk = extraction.chains.filter((c) => c.ok).length;
-  const hasFrame = extraction.concrete_volume_m3 != null;
-
-  return (
-    <div className="mb-8 animate-stagger">
-      <div className="border border-border rounded-lg bg-card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-          <Mono>How this plan was read</Mono>
-          <span className={`h-6 px-3 rounded-full text-[10px] font-mono tracking-widest uppercase flex items-center border ${tone}`}>
-            {label} confidence &middot; {Math.round(extraction.confidence * 100)}%
-          </span>
-        </div>
-
-        <div
-          className={`grid grid-cols-2 divide-x divide-border ${
-            hasFrame ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-4"
-          }`}
-        >
-          <div className="px-5 py-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Envelope</p>
-            <p className="text-[12px] font-mono text-foreground">
-              {extraction.envelope_w_m.toFixed(2)} &times; {extraction.envelope_l_m.toFixed(2)} m
-            </p>
-            <p className="text-[10px] font-mono text-muted-foreground/70">read as {extraction.unit}</p>
-          </div>
-          <div className="px-5 py-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Wall length</p>
-            <p className="text-[12px] font-mono text-foreground">{extraction.total_wall_m.toFixed(2)} m</p>
-            <p className="text-[10px] font-mono text-muted-foreground/70">
-              {extraction.exterior_wall_m.toFixed(1)} ext + {extraction.interior_wall_m.toFixed(1)} int
-            </p>
-          </div>
-          <div className="px-5 py-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Dimension chains</p>
-            <p className="text-[12px] font-mono text-foreground">{chainsOk}/{extraction.chains.length} closed</p>
-            <p className="text-[10px] font-mono text-muted-foreground/70">{extraction.rooms.length} rooms read</p>
-          </div>
-          <div className="px-5 py-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Area accounted</p>
-            <p className="text-[12px] font-mono text-foreground">{Math.round(extraction.area_accounted_ratio * 100)}%</p>
-            <p className="text-[10px] font-mono text-muted-foreground/70">
-              {extraction.doors} doors &middot; {extraction.windows} windows
-            </p>
-          </div>
-          {hasFrame && (
-            <div className="px-5 py-4">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Concrete</p>
-              <p className="text-[12px] font-mono text-foreground">
-                {extraction.concrete_volume_m3!.toFixed(2)} m&sup3;
-              </p>
-              <p className="text-[10px] font-mono text-amber-500/80">
-                {extraction.column_count} columns &middot; assumed
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {extraction.warnings.length > 0 && (
-        <div className="border border-orange-900/50 rounded-lg p-5 bg-orange-950/10 mt-4">
-          <Mono className="block mb-3 text-orange-400">
-            {extraction.warnings.length} thing{extraction.warnings.length > 1 ? "s" : ""} to check
-          </Mono>
-          <ul className="space-y-2">
-            {extraction.warnings.map((w, i) => (
-              <li key={i} className="text-[11px] font-mono text-muted-foreground leading-relaxed flex gap-2">
-                <span className="text-orange-400/70 shrink-0">&bull;</span>
-                <span>{w}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function ResultsScreen() {
   const navigate = useNavigate();
@@ -280,7 +195,13 @@ export function ResultsScreen() {
               <StatCard icon={<ListChecks size={15} />} label={thirdTile.label} value={thirdTile.value} />
             </div>
 
-            {project.extraction && <ReadQuality extraction={project.extraction} />}
+            <button
+              onClick={() => navigate("/projects")}
+              className="flex items-center gap-2 text-[11px] font-mono tracking-[0.14em] uppercase text-muted-foreground hover:text-foreground transition-colors mb-8 press-scale"
+            >
+              <ArrowLeft size={12} />
+              Back to Projects
+            </button>
 
             {rows.length === 0 && (
               <div className="border border-border rounded-lg p-6 bg-card mb-8">

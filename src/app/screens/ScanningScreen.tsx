@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { PixelLogo } from "../components/PixelLogo";
 import { useLocation, useNavigate } from "react-router";
 import { estimateFromImage, readsPrintedDimensions } from "../../lib/estimate";
-import { markProjectError, updateProjectEstimate } from "../../lib/projects";
+import { createProject, markProjectError, updateProjectEstimate } from "../../lib/projects";
 
-type NavState = { projectId?: string; planType?: string; file?: File };
+type NavState = { projectId?: string; name?: string; description?: string; planType?: string; file?: File };
 
 /** Reading printed dimensions off the drawing. */
 const OCR_STEPS = [
@@ -27,18 +27,26 @@ const DETECTION_STEPS = [
 export function ScanningScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectId, planType, file } = (location.state ?? {}) as NavState;
+  const { projectId: existingProjectId, name, description, planType, file } = (location.state ?? {}) as NavState;
 
   const [progress, setProgress] = useState(0);
   const [step, setStep]         = useState(0);
   const [error, setError]       = useState("");
+  // The id of the project row this scan is attached to. Starts out as
+  // whatever came in via nav state (a retry after a previous failure);
+  // otherwise it's filled in once the row is actually created below.
+  // Mirrored into a ref too, since the effect's catch handler needs the
+  // freshest value and closures over state would only ever see the value
+  // from when the effect first ran.
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(existingProjectId ?? null);
+  const activeProjectIdRef = useRef<string | null>(existingProjectId ?? null);
   const ran = useRef(false);
 
   const readsDimensions = readsPrintedDimensions(planType);
   const steps = readsDimensions ? OCR_STEPS : DETECTION_STEPS;
 
   useEffect(() => {
-    if (!projectId || !file) {
+    if (!name || !file) {
       navigate("/projects/details");
       return;
     }
@@ -56,22 +64,31 @@ export function ScanningScreen() {
       });
     }, 90);
 
-    // One endpoint for every plan type. Floor plans are read from their
-    // printed dimensions; the rest are counted against uploaded symbol
-    // references. The backend picks the path and prices both the same way.
-    estimateFromImage(file, planType ?? "Floor Plan")
-      .then((result) => updateProjectEstimate(projectId, result))
-      .then(() => {
+    // The project row is only created here, right as the scan starts -
+    // not back on the Details screen - so abandoning the wizard before
+    // this point never leaves a stuck "processing" project behind. On a
+    // retry after a previous failure, existingProjectId is reused instead
+    // of creating a second row.
+    (existingProjectId
+      ? Promise.resolve(existingProjectId)
+      : createProject({ name, description: description ?? "", planType: planType ?? "Floor Plan" }).then((p) => {
+          activeProjectIdRef.current = p.id;
+          setActiveProjectId(p.id);
+          return p.id;
+        })
+    )
+      .then((id) => estimateFromImage(file, planType ?? "Floor Plan").then((result) => updateProjectEstimate(id, result).then(() => id)))
+      .then((id) => {
         clearInterval(tick);
         setProgress(100);
         setStep(steps.length - 1);
-        setTimeout(() => navigate("/results", { state: { projectId } }), 500);
+        setTimeout(() => navigate("/results", { state: { projectId: id } }), 500);
       })
       .catch(async (e) => {
         clearInterval(tick);
         const message = e instanceof Error ? e.message : "Scan failed.";
         setError(message);
-        await markProjectError(projectId, message).catch(() => {});
+        if (activeProjectIdRef.current) await markProjectError(activeProjectIdRef.current, message).catch(() => {});
       });
 
     return () => clearInterval(tick);
@@ -89,7 +106,7 @@ export function ScanningScreen() {
           Check that the backend server is running at the address configured in VITE_SCAN_API_URL.
         </p>
         <button
-          onClick={() => navigate("/upload", { state: { projectId, planType } })}
+          onClick={() => navigate("/upload", { state: { projectId: activeProjectId, name, description, planType } })}
           className="h-9 px-4 rounded-lg border border-border text-[11px] font-mono tracking-[0.14em] uppercase press-scale hover:bg-accent"
         >
           Back to Upload

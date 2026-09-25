@@ -24,6 +24,7 @@ export function Btn({
   className = "",
   icon,
   full,
+  disabled = false,
 }: {
   children: React.ReactNode;
   onClick?: (e?: React.MouseEvent) => void;
@@ -31,8 +32,9 @@ export function Btn({
   className?: string;
   icon?: React.ReactNode;
   full?: boolean;
+  disabled?: boolean;
 }) {
-  const base = `h-8 px-4 rounded-lg text-[11px] font-mono tracking-[0.12em] uppercase flex items-center gap-2 press-scale cursor-pointer shrink-0 ${full ? "w-full justify-center" : ""}`;
+  const base = `h-8 px-4 rounded-lg text-[11px] font-mono tracking-[0.12em] uppercase flex items-center gap-2 press-scale cursor-pointer shrink-0 ${full ? "w-full justify-center" : ""} ${disabled ? "opacity-40 cursor-not-allowed pointer-events-none" : ""}`;
   const vs = {
     primary:   "bg-foreground text-background border border-foreground hover:bg-foreground/85",
     secondary: "bg-background text-foreground border border-border hover:bg-accent",
@@ -40,7 +42,7 @@ export function Btn({
     danger:    "bg-background text-red-400 border border-red-900/50 hover:bg-red-950 hover:text-red-300",
   };
   return (
-    <button onClick={onClick} className={`${base} ${vs[variant]} ${className}`}>
+    <button onClick={onClick} disabled={disabled} className={`${base} ${vs[variant]} ${className}`}>
       {icon && <span className="shrink-0">{icon}</span>}
       {children}
     </button>
