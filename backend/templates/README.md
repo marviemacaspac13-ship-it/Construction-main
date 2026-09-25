@@ -51,6 +51,15 @@ orientation needs its own reference.
 
 ## What cannot go here
 
+- **Door and window symbols.** Tried 25 Sep 2026 with a door leaf (one half of the
+  EdrawMax "double door" - the sheet has no plain single swing) and its window symbol, in 8
+  orientations at three sizes, on all four floor plans. At 0.66 the window returns 119-239
+  hits per sheet against about 9-11 real windows; the door finds 5 real doors on `01.png` (of
+  about 9, plus one kitchen counter) but 1 of 6 on `04.jpg` and nothing on `03.png`, and one
+  step lower it returns hundreds. The door hits that were real were catching the hinge
+  corner, not the swing. Even perfect counts would barely move a price: the assumed 1 door
+  and 1 window per room already lands within 1% on `04.jpg`, the one plan with known counts,
+  and gives 10 / 10 on `01.png` against about 9 / 11 drawn.
 - **Plumbing fixture symbols.** Tried 25 Sep 2026 with the LAV (both styles), WC, UR and KS
   symbols from a sanitary legend (E.H. Sison Engineers, sheet P-01), each in 4 rotations,
   mirrored, at two sizes, on all five plumbing samples. At 0.66 they return 88-291 "water
