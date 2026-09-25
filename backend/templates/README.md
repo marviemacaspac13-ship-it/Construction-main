@@ -38,11 +38,12 @@ before being turned away — do not re-add them without a new hand count:
 
 **The variant is assumed, not read.** These are filed under the `01` variant as a deliberate
 default, so every match prices as a 1-gang outlet. Every detection-path estimate carries a
-line saying so — see `_source_assumptions()` in `app/takeoff/estimator.py`. Note that the
-Mapúa legend itself says the opposite of that default: in its convention **the number of
-lines through the circle is the gang count** (one single, two duplex, three plus a cross
-triplex), which would make every outlet on `05.png` and `10.png` a duplex, `OT02`. Which
-convention TRACE follows is an open question for the owner, not settled here.
+line saying so — see `_source_assumptions()` in `app/takeoff/estimator.py`. The Mapúa legend
+draws single, duplex and triplex receptacles with one, two and three lines, and every outlet
+on `05.png` and `10.png` is its duplex symbol. That does **not** make them `OT02`: duplex
+counts sockets, gang counts plate slots, and a duplex receptacle normally sits in a 1-gang
+box. **Settled by the owner, 25 Sep 2026: the duplex symbol stays `OT01`.** Do not relabel
+the crops by line count.
 
 **Four crops for one symbol is not a mistake.** The convenience outlet is drawn rotated to
 match the wall it sits on, and `cv2.matchTemplate` is not rotation-invariant, so each
