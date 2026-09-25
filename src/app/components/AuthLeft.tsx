@@ -77,7 +77,7 @@ export function RightPanelGrid() {
 export function AuthLeft() {
   const features = [
     { Icon: Zap,      title: "AI-Powered Analytics",              desc: "Detects and quantifies every element with high precision across all plan types." },
-    { Icon: FileText, title: "Electrical Material Cost Estimation", desc: "Precise material breakdown with unit prices and total cost output per plan." },
+    { Icon: FileText, title: "Detailed Material Cost Estimation", desc: "Precise material breakdown with unit prices and total cost output per plan." },
     { Icon: Layers,   title: "Multi Plan Support",                 desc: "Floor, electrical, and plumbing plans — analyzed in one unified workflow." },
   ];
 

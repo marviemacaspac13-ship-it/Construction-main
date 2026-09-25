@@ -103,7 +103,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
       <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
 
       {/* Card */}
-      <div className="relative w-full max-w-xl bg-card border border-border rounded-xl overflow-hidden animate-pop-in border-beam shadow-2xl">
+      <div className="relative w-full max-w-3xl bg-card border border-border rounded-xl overflow-hidden animate-pop-in border-beam shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-border">
           <div className="flex items-center gap-3">

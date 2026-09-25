@@ -113,6 +113,11 @@ export async function getProject(id: string): Promise<Project | null> {
   return data as Project | null;
 }
 
+export async function renameProject(id: string, name: string): Promise<void> {
+  const { error } = await supabase.from("projects").update({ name }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteProject(id: string): Promise<void> {
   const { error } = await supabase.from("projects").delete().eq("id", id);
   if (error) throw new Error(error.message);

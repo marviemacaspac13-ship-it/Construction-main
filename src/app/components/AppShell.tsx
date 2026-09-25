@@ -1,12 +1,40 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { LayoutDashboard, FolderOpen, Clock, HelpCircle, User, LogOut, MessageSquare, Cpu, Shapes } from "lucide-react";
 import { Mono, Btn } from "./ui";
+import { supabase } from "../../lib/supabase";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const { pathname } = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null);
+      setAvatarUrl((data.user?.user_metadata?.avatar_url as string | undefined) ?? null);
+    });
+    // supabase.auth.updateUser() (called from the Profile screen) fires a
+    // USER_UPDATED event on this same client, so a new avatar or name shows
+    // up here immediately without needing a shared store or a page reload.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setEmail(session?.user?.email ?? null);
+      setAvatarUrl((session?.user?.user_metadata?.avatar_url as string | undefined) ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Shown before the @ — a reasonable stand-in for a username since this
+  // project doesn't collect a separate display name at sign-up.
+  const displayName = email ? email.split("@")[0] : "…";
+
+  const handleLogout = async () => {
+    setMenuOpen(false);
+    await supabase.auth.signOut();
+    navigate("/sign-in");
+  };
 
   const navItems = [
     { path: "/dashboard",       Icon: LayoutDashboard, label: "Dashboard" },
@@ -26,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-4">
           <span className="font-mono font-light text-foreground" style={{ letterSpacing: "12px", fontSize: "16px" }}>TRACE</span>
           <div className="w-px h-4 bg-border" />
-          <Mono>User</Mono>
+          <Mono>{displayName}</Mono>
         </div>
         <div className="flex items-center gap-2">
           <Btn variant="ghost" onClick={() => navigate("/feedback")} icon={<MessageSquare size={12} />}>Feedback</Btn>
@@ -38,20 +66,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="relative">
             <button
-              onClick={() => { setMenuOpen((v) => !v); if (pathname !== "/menu") navigate("/menu"); }}
-              className={`w-8 h-8 rounded-full border flex items-center justify-center press-scale ${menuOpen ? "border-foreground/40 bg-muted" : "border-border bg-accent hover:bg-muted"}`}
+              onClick={() => setMenuOpen((v) => !v)}
+              className={`w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden press-scale ${menuOpen ? "border-foreground/40 bg-muted" : "border-border bg-accent hover:bg-muted"}`}
             >
-              <User size={13} className="text-muted-foreground" />
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <User size={13} className="text-muted-foreground" />
+              )}
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-10 w-48 bg-popover border border-border rounded-lg overflow-hidden z-50 shadow-lg animate-pop-in origin-top-right">
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-10 w-48 bg-popover border border-border rounded-lg overflow-hidden z-50 shadow-lg animate-pop-in origin-top-right">
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-                  <div className="w-7 h-7 rounded-full bg-accent border border-border flex items-center justify-center shrink-0">
-                    <User size={11} className="text-muted-foreground" />
+                  <div className="w-7 h-7 rounded-full bg-accent border border-border flex items-center justify-center overflow-hidden shrink-0">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={11} className="text-muted-foreground" />
+                    )}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-mono text-foreground leading-tight">User</p>
-                    <p className="text-[10px] font-mono text-muted-foreground truncate">user@email.com</p>
+                    <p className="text-[11px] font-mono text-foreground leading-tight truncate">{displayName}</p>
+                    <p className="text-[10px] font-mono text-muted-foreground truncate">{email ?? ""}</p>
                   </div>
                 </div>
                 <button
@@ -61,12 +99,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <User size={11} className="text-muted-foreground" /> Profile
                 </button>
                 <button
-                  onClick={() => { setMenuOpen(false); navigate("/sign-in"); }}
+                  onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-mono text-muted-foreground hover:bg-accent hover:text-foreground hover:pl-5 transition-all duration-200"
                 >
                   <LogOut size={11} className="text-muted-foreground" /> Logout
                 </button>
               </div>
+              </>
             )}
           </div>
         </div>
