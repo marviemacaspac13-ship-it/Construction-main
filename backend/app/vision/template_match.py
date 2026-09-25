@@ -6,16 +6,21 @@ from app.templates_store import load_templates_for_matching
 
 SCALES = [0.6, 0.75, 0.85, 1.0, 1.15, 1.3, 1.5]
 
-# Set from the only plan anybody has counted by hand. On `05.png` the true
-# figures are 21 ceiling outlets and 14 convenience outlets; this threshold
-# recovers 15 and 13 of them, against 13 and 8 at the old 0.72.
+# Set from a hand count. On `05.png` the true figures are 21 ceiling outlets
+# and 14 convenience outlets as first counted; this threshold recovered 15
+# and 13 of them, against 13 and 8 at the old 0.72.
 #
 # 0.66 is the last safe step, not a comfortable middle. One notch lower at
 # 0.64 the wall outlet jumps to 28 against a true 14, and by 0.55 the sheet
-# yields 145 - door swings and wall hatching. Every detection at 0.66 is a
-# distinct location: no cross-label overlaps, no near-duplicates, and both
-# counts still sit UNDER the hand count, so nothing here is a false
-# positive. Do not lower it further without new ground truth.
+# yields 145 - door swings and wall hatching. Do not lower it without new
+# ground truth.
+#
+# The outlet count has since been redone (25 Sep): 05.png carries 18 wall
+# outlets, and 2 of the 13 above were a door jamb and a wall line, so
+# sitting under the hand count did NOT prove every hit was real. Only a
+# per-hit check against the drawing can. With the duplex crops that now
+# stand in for the originals the sheet reads 16 of 18 with none false;
+# `tests/test_ground_truth.py` has the three counted plans.
 #
 # Recall bought here is paid for elsewhere: at 0.66 plans that used to match
 # nothing return two to five stray hits. MIN_DEVICES in `main.py` is what

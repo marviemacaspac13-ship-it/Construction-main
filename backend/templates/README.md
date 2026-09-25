@@ -11,23 +11,42 @@ with a working detector.
 
 ## What is here, and how confident it is
 
-Cut from `tests/fixtures/plans/05.png` itself — a reference has to look like the drawing it
-will be matched against, and multi-scale matching forgives size but not style.
+| Folder | Crop | Source | What it is on the plan |
+| --- | --- | --- | --- |
+| `CLR01/` | `ceiling_cross.png` | cut from `tests/fixtures/plans/05.png` | cross-circle, mid-room — ceiling lighting outlet |
+| `OT01/` | `mapua_duplex_r0/90/180/270.png` | Mapúa University slide deck, "Example of Convenience Outlets", duplex receptacle | circle with two lines through it, on a wall — convenience outlet |
 
-| Folder | Crop | What it is on the plan |
-| --- | --- | --- |
-| `CLR01/` | `ceiling_cross.png` | cross-circle, mid-room — ceiling lighting outlet |
-| `OT01/` | `wall_outlet_h.png`, `wall_outlet_v.png` | circle with one line, on a wall — convenience outlet |
+**The outlet crops do not come from a sample plan, and they beat the ones that did.** The
+first `OT01` crops were cut from `05.png` itself, on the reasoning that a reference has to
+look like the drawing it is matched against. They found 13 outlets there — 2 of them a door
+jamb and a wall line — and **none of the 14 on `10.png`**, a different draughtsman's sheet.
+The textbook duplex symbol, shrunk to the ~18 px these plans draw at, finds 16 of 18 on
+`05.png` with nothing false, 9 of 14 on `10.png`, and no longer mislabels lights as outlets
+on `08.png`. Swapped on 25 Sep 2026; `tests/test_ground_truth.py` holds the counts.
 
-**The variant is assumed, not read.** The drawing puts the same circle on a 1-gang and a
-3-gang outlet, and the same ring on every size of ceiling receptacle, so nothing on the page
-says whether a match is `OT01`, `OT02` or `OT03`. These were filed under the `01` variant as
-a deliberate default. Every detection-path estimate carries a line saying so — see
-`_source_assumptions()` in `app/takeoff/estimator.py`.
+What the same deck offered and **failed**, each measured on all 11 sample electrical plans
+before being turned away — do not re-add them without a new hand count:
 
-**Two crops for one symbol is not a mistake.** The convenience outlet is drawn rotated to
+| Symbol | Why it was rejected |
+| --- | --- |
+| single receptacle (one line) | 279 hits on `05.png` — a circle and a line is everywhere |
+| triplex receptacle | 80–160 hits on sheets that carry almost nothing |
+| special-purpose (filled, ACU) | 15–18 hits on sheets that are otherwise refused, which would price them |
+| ceiling outlet, plain circle | pushes `05.png` past its hand count of 21 |
+| ceiling outlet, with ticks | `08.png` 17 -> 29 against a true 19 |
+| ceiling outlet, with X | 9 hits on `10.png`, a power layout with no lights at all |
+
+**The variant is assumed, not read.** These are filed under the `01` variant as a deliberate
+default, so every match prices as a 1-gang outlet. Every detection-path estimate carries a
+line saying so — see `_source_assumptions()` in `app/takeoff/estimator.py`. Note that the
+Mapúa legend itself says the opposite of that default: in its convention **the number of
+lines through the circle is the gang count** (one single, two duplex, three plus a cross
+triplex), which would make every outlet on `05.png` and `10.png` a duplex, `OT02`. Which
+convention TRACE follows is an open question for the owner, not settled here.
+
+**Four crops for one symbol is not a mistake.** The convenience outlet is drawn rotated to
 match the wall it sits on, and `cv2.matchTemplate` is not rotation-invariant, so each
-orientation needs its own reference. Four would probably be better than two.
+orientation needs its own reference.
 
 ## What cannot go here
 
