@@ -141,18 +141,25 @@ def _wire_and_conduit_from_devices(
     if devices <= 0:
         return []
 
+    # A lighting point and a convenience outlet take different allowances:
+    # a light hangs off a ceiling run with no wall drop (see params.py).
+    per_point = {
+        "lighting": (params.lighting_wire_m_per_point, params.lighting_route_m_per_point),
+        "convenience": (params.wire_m_per_device, params.conduit_m_per_device),
+    }
+
     lines: list[BomLine] = []
     for kind, count in (("lighting", lighting), ("convenience", convenience)):
-        if count <= 0 or params.wire_m_per_device <= 0:
+        wire_each = per_point[kind][0]
+        if count <= 0 or wire_each <= 0:
             continue
-        length_m = count * params.wire_m_per_device
         lines.append(
             BomLine(
                 item_id=_GAUGE_BY_KIND[kind],
-                quantity=with_waste(length_m, params.wire_waste),
+                quantity=with_waste(count * wire_each, params.wire_waste),
                 rule="electrical.conductor_from_count",
                 derivation=(
-                    f"{count} {kind} devices x {params.wire_m_per_device:g} m of conductor "
+                    f"{count} {kind} devices x {wire_each:g} m of conductor "
                     f"each + {params.wire_waste:.0%} waste - DERIVED from the count, no "
                     f"circuit routes were measured"
                 ),
@@ -160,19 +167,24 @@ def _wire_and_conduit_from_devices(
             )
         )
 
-    if params.conduit_m_per_device > 0:
-        conduit_m = devices * params.conduit_m_per_device
+    parts = [
+        (kind, count, per_point[kind][1])
+        for kind, count in (("lighting", lighting), ("convenience", convenience))
+        if count > 0 and per_point[kind][1] > 0
+    ]
+    if parts:
+        conduit_m = sum(count * each for _, count, each in parts)
         lines.append(
             BomLine(
                 item_id=CONDUIT_ITEM,
                 quantity=with_waste(conduit_m, params.conduit_waste),
                 rule="electrical.conduit_from_count",
                 derivation=(
-                    f"{devices} devices x {params.conduit_m_per_device:g} m of conduit each "
-                    f"+ {params.conduit_waste:.0%} waste - DERIVED from the count, no "
-                    f"circuit routes were measured"
+                    " + ".join(f"{count} {kind} x {each:g} m" for kind, count, each in parts)
+                    + f" of conduit + {params.conduit_waste:.0%} waste - DERIVED from the "
+                    f"count, no circuit routes were measured"
                 ),
-                inputs={"devices": float(devices)},
+                inputs={"devices": float(sum(count for _, count, _ in parts))},
             )
         )
     return lines

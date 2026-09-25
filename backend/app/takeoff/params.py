@@ -133,6 +133,9 @@ class EstimatingParams(BaseModel):
     # At 12 m an electrical estimate came out ~40% short on its largest
     # line. This is the second constant an outside source has corrected by
     # a wide margin, after Guide.docx doubled the column section.
+    #
+    # Since 25 Sep 2026 this and the conduit figure below apply to
+    # CONVENIENCE OUTLETS only. Lighting has its own allowance, further down.
     wire_m_per_device: float = Field(20.0, ge=0, le=100)
 
     # CONDUIT holds at 6.0, and the derivation is worth keeping because it
@@ -143,6 +146,43 @@ class EstimatingParams(BaseModel):
     # 3.0 m sticks PVC conduit is sold in here (Neltex, Emerald, Atlanta),
     # which is what estimators actually budget.
     conduit_m_per_device: float = Field(6.0, ge=0, le=100)
+
+    # LIGHTING POINTS are not outlets, and pricing them at the outlet's 20 m
+    # over-counted the largest line in the trade (owner, 25 Sep 2026). A
+    # light sits in the ceiling plane: the run loops fixture to fixture
+    # along the ceiling and drops down a wall only for the switch leg, so
+    # there is no 2.40 m wall drop per point.
+    #
+    # THIS IS AN ESTIMATING ASSUMPTION, NOT A PHILIPPINE-STANDARD VALUE. The
+    # PEC prescribes no "metres of wire per lighting point". What it does
+    # govern is grounding and bonding where applicable, and the number of
+    # conductors follows from the wiring method, which a plan does not show.
+    # So the figure is built from its parts and each part is a knob:
+    #
+    #     route per point   3.6 m   the ceiling run between fixtures - the
+    #                               same horizontal run the outlet conduit
+    #                               above is built from, without its drop
+    #     conductors        3       line, neutral and an equipment ground;
+    #                               2 where the wiring method carries none
+    #     free conductor    0.15 m  at each of the two boxes (PEC 3.00.14)
+    #
+    #     3 x (3.6 + 2 x 0.15) = 11.7 m of wire and 3.6 m of conduit
+    #
+    # 3 conductors is chosen as the cautious side: short wire stops a job,
+    # spare wire does not. At 2 it is 7.8 m.
+    lighting_route_m_per_point: float = Field(3.6, ge=0, le=100)
+    lighting_conductors: int = Field(3, ge=1, le=6)
+    box_free_conductor_m: float = Field(0.15, ge=0, le=1)
+
+    @property
+    def lighting_wire_m_per_point(self) -> float:
+        # No run means no wire: the box allowance alone must not keep a
+        # switched-off line alive at 0.9 m a point.
+        if self.lighting_route_m_per_point <= 0:
+            return 0.0
+        return self.lighting_conductors * (
+            self.lighting_route_m_per_point + 2 * self.box_free_conductor_m
+        )
 
     # The plumbing allowances also held: a Philippine bathroom is compact
     # (~1.5 x 2.0 m) with the main line just outside the wall or overhead,
@@ -193,12 +233,23 @@ class EstimatingParams(BaseModel):
                 "electrical",
                 f"Where no circuit routes are measured, wire and conduit are derived from the "
                 f"device count at {self.wire_m_per_device:g} m of conductor and "
-                f"{self.conduit_m_per_device:g} m of conduit per device. No plan states these "
-                f"lengths, so they are not measurements of THIS building - but they are not "
-                f"invented either: they follow Philippine practice (Fajardo; PEC Part 1 2017 "
-                f"Art. 2.50 and 3.00.14; NBCP Rule VIII), where a 6 m conduit run carries "
-                f"three conductors and the boxes take 150 mm of free wire each. Wire remains "
-                f"the largest single cost in the trade.",
+                f"{self.conduit_m_per_device:g} m of conduit per convenience outlet. No plan "
+                f"states these lengths, so they are not measurements of THIS building - but "
+                f"they are not invented either: they follow Philippine practice (Fajardo; PEC "
+                f"Part 1 2017 Art. 2.50 and 3.00.14; NBCP Rule VIII), where a 6 m conduit run "
+                f"carries three conductors and the boxes take 150 mm of free wire each. Wire "
+                f"remains the largest single cost in the trade.",
+            ),
+            (
+                "electrical",
+                f"Lighting points are allowed {self.lighting_wire_m_per_point:g} m of wire and "
+                f"{self.lighting_route_m_per_point:g} m of conduit each: a "
+                f"{self.lighting_route_m_per_point:g} m ceiling run between fixtures, "
+                f"{self.lighting_conductors} conductors, and "
+                f"{self.box_free_conductor_m * 1000:g} mm of free wire at each box. This is an "
+                f"estimating assumption, not a Philippine-standard value - the PEC sets no "
+                f"length per lighting point, and the conductor count depends on a wiring "
+                f"method the plan does not show.",
             ),
             ("plumbing", f"Waste allowance: pipe {self.pipe_waste:.0%}."),
             (

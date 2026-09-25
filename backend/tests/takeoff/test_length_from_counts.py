@@ -67,6 +67,28 @@ def test_the_allowances_have_defaults():
     assert DEFAULTS.main_run_m_per_fixture == 1.5
 
 
+def test_a_lighting_point_is_built_from_its_parts():
+    """Not an outlet: a ceiling run with no wall drop (owner, 25 Sep 2026).
+
+    3 conductors x (3.6 m run + 150 mm free wire at each of 2 boxes).
+    """
+    assert DEFAULTS.lighting_route_m_per_point == 3.6
+    assert DEFAULTS.lighting_conductors == 3
+    assert DEFAULTS.lighting_wire_m_per_point == pytest.approx(11.7)
+
+
+def test_the_conductor_count_is_a_knob_not_a_standard():
+    """The PEC ties conductors to the wiring method, which a plan does not show."""
+    two_wire = EstimatingParams(lighting_conductors=2)
+    assert two_wire.lighting_wire_m_per_point == pytest.approx(7.8)
+
+
+def test_the_lighting_allowance_is_labelled_an_assumption():
+    line = next(a for a in DEFAULTS.assumption_lines({"electrical"}) if "Lighting points" in a)
+    assert "estimating assumption, not a Philippine-standard value" in line
+    assert "11.7 m" in line
+
+
 def test_wire_is_conduit_times_three_conductors_plus_splices():
     """The relationship is the point, not the two numbers separately.
 
@@ -126,8 +148,8 @@ def test_gauge_follows_what_the_device_is_for():
              if li.rule == "electrical.conductor_from_count"]
     by_item = {li.item_id: li for li in lines}
     assert set(by_item) == {"ELW05", "ELW04"}
-    # 13 ceiling outlets at 20 m + 10% waste
-    assert by_item["ELW05"].quantity == pytest.approx(13 * 20.0 * 1.10)
+    # 13 ceiling outlets at 11.7 m (lighting points) + 10% waste
+    assert by_item["ELW05"].quantity == pytest.approx(13 * 11.7 * 1.10)
     # 8 wall outlets at 20 m + 10% waste
     assert by_item["ELW04"].quantity == pytest.approx(8 * 20.0 * 1.10)
 
@@ -137,7 +159,8 @@ def test_conduit_covers_every_device_regardless_of_gauge():
              if li.rule == "electrical.conduit_from_count"]
     assert len(lines) == 1
     assert lines[0].item_id == "FPVC01"
-    assert lines[0].quantity == pytest.approx(21 * 6.0 * 1.10)
+    # 13 lights on a 3.6 m ceiling run, 8 outlets on the 6 m run with its drop
+    assert lines[0].quantity == pytest.approx((13 * 3.6 + 8 * 6.0) * 1.10)
 
 
 def test_no_devices_means_no_wire_rather_than_a_zero_line():
@@ -146,7 +169,9 @@ def test_no_devices_means_no_wire_rather_than_a_zero_line():
 
 
 def test_a_zero_allowance_disables_the_line_cleanly():
-    off = EstimatingParams(wire_m_per_device=0, conduit_m_per_device=0)
+    off = EstimatingParams(
+        wire_m_per_device=0, conduit_m_per_device=0, lighting_route_m_per_point=0
+    )
     rules = rules_in(electrical_compute(DEVICES, off))
     assert "electrical.conductor_from_count" not in rules
     assert "electrical.conduit_from_count" not in rules
