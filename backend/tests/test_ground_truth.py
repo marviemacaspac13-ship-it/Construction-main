@@ -103,7 +103,8 @@ def test_combined_no_count_exceeds_the_hand_count(combined):
 
 
 def test_combined_ceiling_outlet_recall(combined):
-    """15 of 21 at the threshold this was measured at."""
+    """16 of 21. The 16th (27 Sep) is a plain circle on the dining-area
+    lighting circuit, found by the pendant-fixture legend crop."""
     counts = Counter(d.label for d in combined)
     assert counts["CLR01"] / COMBINED_CEILING >= 0.70
 
@@ -122,18 +123,16 @@ def test_combined_convenience_outlet_recall(combined):
 # --- 08.png, the lighting-only plan -------------------------------------
 
 def test_lighting_every_symbol_on_the_sheet_is_found(lighting):
-    """17 distinct locations against 19 drawn, every one labelled right.
+    """19 of 19, every hit checked against the drawing (27 Sep 2026).
 
-    This plan was called a false pass before anyone counted it: 17 ceiling
-    outlets on a 0.17 MP sheet looked like noise clearing the floor. It was
-    not. Nothing distinguished it from a bad read by count or density, and
-    only counting could tell.
-
-    It used to find all 19 - but 2 of them only through the old wall-outlet
-    crop, which labelled those lights as outlets. That same crop made the
-    two false hits on 05.png. Replacing it (25 Sep) traded 2 real-but-
-    mislabelled finds here for 2 false finds there, and the labels on this
-    sheet are now all correct.
+    The history is a warning about totals. For weeks this sheet "found" 17
+    against 19 and was recorded as its best read. Checking each hit showed
+    10 of the 17 were bare crossings of two thin lines, and only 7 were
+    lights: the false hits were covering for 12 real lights the crossed-
+    circle crop never matched, because this draughtsman draws a circle with
+    short ticks OUTSIDE it. The ring check removed the crossings; the
+    pendant-fixture legend crop, which is drawn exactly that way, found the
+    12. A count that matches the truth proves nothing on its own.
     """
     found = centres(lighting)
     distinct = [
@@ -144,9 +143,9 @@ def test_lighting_every_symbol_on_the_sheet_is_found(lighting):
 
 
 def test_lighting_ceiling_outlet_recall(lighting):
-    """17 of 19 correctly labelled. Second drawing, same threshold."""
+    """19 of 19, and never more: over the truth would mean a false hit."""
     counts = Counter(d.label for d in lighting)
-    assert counts["CLR01"] / LIGHTING_CEILING >= 0.85
+    assert LIGHTING_CEILING - 1 <= counts["CLR01"] <= LIGHTING_CEILING
 
 
 def test_lighting_convenience_outlets_are_mislabels_and_stay_few(lighting):
@@ -175,24 +174,37 @@ def test_power_outlets_are_found_on_a_third_drawing(power):
     assert counts["OT01"] / POWER_CONVENIENCE >= 0.6
 
 
-def test_power_ceiling_hits_are_known_false_and_stay_few(power):
-    """This sheet draws no lights, so every CLR01 here is wrong - today 4.
+def test_power_sheet_has_no_false_lights(power):
+    """This sheet draws no lights, so any CLR01 here is wrong - now none.
 
-    Two are gridline bubbles in the left margin, where the grid line
-    through the circle looks like the cross of a ceiling outlet; the others
-    sit on a column and in the dining area. They are a known error, priced
-    as real, and this pins them so they cannot quietly grow.
+    There used to be 4, recorded as gridline bubbles. Checked hit by hit
+    on 27 Sep they were not: three were plain crossings of two thin lines
+    and one the corner of the word DINING, with no circle at all. The ring
+    check in template_match.py removes exactly that.
     """
     counts = Counter(d.label for d in power)
-    assert counts["CLR01"] <= 4
+    assert counts["CLR01"] == 0
 
 
 # --- all three ------------------------------------------------------------
 
-def test_every_counted_plan_clears_the_pricing_floor(combined, lighting, power):
+def test_the_well_read_plans_clear_the_pricing_floor(combined, lighting):
     """Or the plans that demonstrably read would start being refused."""
     from app.main import MIN_DEVICES
 
     assert len(combined) >= MIN_DEVICES
     assert len(lighting) >= MIN_DEVICES
-    assert len(power) >= MIN_DEVICES
+
+
+def test_the_power_plan_is_refused_not_priced_short(power):
+    """9 of 14 outlets is under the floor, and it stays refused.
+
+    It priced until 27 Sep only because 4 false "lights" lifted it from 9
+    to 13. With them gone, a price would be about a third short. Decided
+    by the owner on 27 Sep 2026: refuse it rather than lower MIN_DEVICES.
+    If recall here improves past the floor, this test is meant to fail -
+    update it then.
+    """
+    from app.main import MIN_DEVICES
+
+    assert len(power) < MIN_DEVICES

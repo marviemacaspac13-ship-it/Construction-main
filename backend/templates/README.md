@@ -14,6 +14,8 @@ with a working detector.
 | Folder | Crop | Source | What it is on the plan |
 | --- | --- | --- | --- |
 | `CLR01/` | `ceiling_cross.png` | cut from `tests/fixtures/plans/05.png` | cross-circle, mid-room — ceiling lighting outlet |
+| `CLR01/` | `legend_pendant_fixture.png` | "Lighting Symbols" chart supplied by the owner, 27 Sep 2026 — *Pendant Fixture Light* | circle with four short ticks OUTSIDE it — how `08.png` draws every light |
+| `CLR01/` | `legend_surface_ceiling.png` | same chart — *Surface Ceiling Light* | circle with four diagonal ticks — how `11.png` draws its lights |
 | `OT01/` | `mapua_duplex_r0/90/180/270.png` | Mapúa University slide deck, "Example of Convenience Outlets", duplex receptacle | circle with two lines through it, on a wall — convenience outlet |
 
 **The outlet crops do not come from a sample plan, and they beat the ones that did.** The
@@ -35,6 +37,40 @@ before being turned away — do not re-add them without a new hand count:
 | ceiling outlet, plain circle | pushes `05.png` past its hand count of 21 |
 | ceiling outlet, with ticks | `08.png` 17 -> 29 against a true 19 |
 | ceiling outlet, with X | 9 hits on `10.png`, a power layout with no lights at all |
+
+### The lighting chart (27 Sep 2026)
+
+The catalog prices no light fixture, only the **ceiling receptacle** behind each light
+point, so every light symbol is filed under `CLR01` whatever the fixture. All 20 symbols
+were cropped, turned into line art (black strokes kept, yellow fill dropped, since plans
+draw them hollow), shrunk to 20 px, and matched **one at a time** on all 12 sample
+electrical sheets with the ring check on. Every hit at a location nothing else found was
+checked against the drawing.
+
+**Adopted:**
+
+| Symbol | Result |
+| --- | --- |
+| Pendant Fixture Light | `08.png` 7 → **19 of 19**, every hit checked; `05.png` +1, a plain circle on the dining lighting circuit |
+| Surface Ceiling Light | 9 light symbols on `11.png`, each checked by eye; nothing on any other sheet. `11.png` is **not hand-counted**, so recall there is unknown |
+
+The "ceiling outlet, with ticks" rejected in the table above (`08.png` 17 → 29) was the
+same idea before the ring check existed; its extra hits were line crossings, which the
+check now removes.
+
+**Rejected** — do not re-add without a new hand count:
+
+| Symbol | Why |
+| --- | --- |
+| External Light | 500–950 hits per sheet |
+| Fluorescent Strip, LED strip (dashed) | 100–760 hits per sheet: a pair of lines or a dash row is everywhere |
+| Recessed Downlighter (plain circle) | grid bubble "C" on `10.png` and `11.png`, patterned floor on `06.jpg` |
+| Recessed Ceiling Light | 9 hits on `11.png`, as Surface Ceiling has, plus 1 unchecked on `08.png` — which is already 19 of 19. Not checked hit by hit; one tick-circle crop is enough until a sheet shows it adds something |
+| Light Point Pendant (diamond) | subset of what Pendant Fixture finds |
+| Light Point Pendant (crossed circle) | only lights the existing crop already finds |
+| Floor Light | one hit, a hatched box beside a motor symbol |
+| Surface Wall, Recessed Wall | land on convenience outlets on `10.png` — a double count |
+| Ceiling Light (X), Outdoor Light, Exit Light, Wall Light, LED Light (square), Luminaire, Light Point Batten, Step Light | **no hit on any sample sheet.** No sheet draws them, so they cannot be shown to work here; adding them untested is how false hits get in |
 
 **The variant is assumed, not read.** These are filed under the `01` variant as a deliberate
 default, so every match prices as a 1-gang outlet. Every detection-path estimate carries a

@@ -26,7 +26,53 @@ SCALES = [0.6, 0.75, 0.85, 1.0, 1.15, 1.3, 1.5]
 # nothing return two to five stray hits. MIN_DEVICES in `main.py` is what
 # keeps those from being priced - the two constants move together.
 MATCH_THRESHOLD = 0.66
-NMS_IOU_THRESHOLD = 0.3 
+NMS_IOU_THRESHOLD = 0.3
+
+# Every symbol in the library is drawn on a CIRCLE, and at 0.66 the matcher
+# also scores bare crossings of two thin lines - dimension lines, grid lines
+# - because a "+" is most of a crossed-circle template. Checked hit by hit
+# on 27 Sep 2026: all 4 "lights" on the power-only 10.png and 10 of the 17
+# on 08.png were line crossings or text, not symbols. The recorded "08.png
+# finds 19 of 19" had matched the hand count in total only.
+#
+# So a hit must have a ring round its centre: walk outward along 48
+# directions, skipping those near the four arms, and count how many meet
+# ink between 0.2 and 0.5 of the box size. Measured on the three
+# hand-counted sheets: real symbols 0.79-1.00, line crossings 0.00-0.11,
+# a text corner 0.61. The library's own crops score 0.75-0.96, and
+# `tests/test_ring_check.py` fails if a new one does not pass - a symbol
+# that is not a circle needs this check rethought, not lowered.
+RING_MIN = 0.70
+RING_RADII = (0.2, 0.5)
+RING_DIRECTIONS = 48
+RING_SKIP_DEG = 20
+INK = 128
+
+
+def _ring_directions() -> np.ndarray:
+    angles = np.arange(RING_DIRECTIONS) * (360.0 / RING_DIRECTIONS)
+    off_axis = np.min(
+        [np.abs((angles - q + 180) % 360 - 180) for q in (0, 90, 180, 270)], axis=0
+    )
+    return np.radians(angles[off_axis >= RING_SKIP_DEG])
+
+
+_DIRECTIONS = _ring_directions()
+
+
+def ring_score(gray: np.ndarray, bbox: list[float]) -> float:
+    """Fraction of off-axis directions that meet ink at a ring's radius."""
+    x1, y1, x2, y2 = bbox
+    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+    size = min(x2 - x1, y2 - y1)
+    radii = np.arange(RING_RADII[0] * size, RING_RADII[1] * size, 0.5)
+    xs = np.rint(cx + np.outer(np.cos(_DIRECTIONS), radii)).astype(int)
+    ys = np.rint(cy + np.outer(np.sin(_DIRECTIONS), radii)).astype(int)
+    h, w = gray.shape[:2]
+    inside = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+    ink = np.zeros(xs.shape, dtype=bool)
+    ink[inside] = gray[ys[inside], xs[inside]] < INK
+    return float(ink.any(axis=1).mean())
 
 
 def _iou(a: list[float], b: list[float]) -> float:
@@ -83,10 +129,15 @@ def match_templates(image_bgr: np.ndarray) -> list[Detection]:
 
             for x, y in zip(xs, ys):
                 score = float(result[y, x])
+                bbox = [float(x), float(y), float(x + rw), float(y + rh)]
+                # Before NMS, not after: a crossing that out-scores a real
+                # symbol beside it would otherwise suppress it.
+                if ring_score(gray, bbox) < RING_MIN:
+                    continue
                 raw_detections.append(Detection(
                     label=item_id,
                     confidence=score,
-                    bbox=[float(x), float(y), float(x + rw), float(y + rh)],
+                    bbox=bbox,
                 ))
 
     return _nms(raw_detections)
