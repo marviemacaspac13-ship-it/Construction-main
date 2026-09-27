@@ -41,6 +41,8 @@ export function ScanningScreen() {
   const [progress, setProgress] = useState(0);
   const [step, setStep]         = useState(0);
   const [error, setError]       = useState("");
+  // The failure could not be recorded, so the row is still "processing".
+  const [unmarked, setUnmarked] = useState(false);
   const ran = useRef(false);
   // Survives a failed scan so "Back to Upload" can hand the existing row
   // back instead of orphaning it.
@@ -98,7 +100,7 @@ export function ScanningScreen() {
         const message = e instanceof Error ? e.message : "Scan failed.";
         setError(message);
         if (created.current) {
-          await markProjectError(created.current, message).catch(() => {});
+          await markProjectError(created.current, message).catch(() => setUnmarked(true));
         }
       }
     })();
@@ -114,6 +116,12 @@ export function ScanningScreen() {
       <div className="flex flex-col items-center justify-center h-full py-20 px-8 animate-page-in text-center">
         <p className="text-[13px] font-mono text-red-400 mb-2">Scan failed</p>
         <p className="text-[11px] font-mono text-muted-foreground max-w-sm mb-6">{error}</p>
+        {unmarked && (
+          <p className="text-[11px] font-mono text-orange-400 max-w-sm mb-6">
+            This project also couldn't be marked as failed, so it will show as "Scanning…" on the
+            Projects page. Going back to upload and scanning again reuses it; otherwise delete it there.
+          </p>
+        )}
         <p className="text-[10px] font-mono text-muted-foreground/60 max-w-sm mb-6">
           Check that the backend server is running at the address configured in VITE_SCAN_API_URL.
         </p>

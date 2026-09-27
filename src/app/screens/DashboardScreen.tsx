@@ -13,7 +13,7 @@ import {
   Droplets,
   Loader2,
 } from "lucide-react";
-import { SectionBar, Mono } from "../components/ui";
+import { SectionBar, Mono, LoadError } from "../components/ui";
 import { NewProjectModal } from "../components/NewProjectModal";
 import { listProjects, type Project } from "../../lib/projects";
 
@@ -110,10 +110,18 @@ export function DashboardScreen() {
   const [modalOpen, setModalOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    listProjects().then(setProjects).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  const load = () => {
+    setLoading(true);
+    setError("");
+    listProjects()
+      .then(setProjects)
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load projects."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
 
   const completed = useMemo(() => projects.filter((p) => p.status === "completed" && p.grand_total != null), [projects]);
 
@@ -167,6 +175,8 @@ export function DashboardScreen() {
           <p className="text-[12px] font-mono text-muted-foreground flex items-center gap-2 mb-8">
             <Loader2 size={12} className="animate-spin-slow" /> Loading dashboard…
           </p>
+        ) : error ? (
+          <LoadError message={error} onRetry={load} />
         ) : (
           <>
             {/* Top statistics */}

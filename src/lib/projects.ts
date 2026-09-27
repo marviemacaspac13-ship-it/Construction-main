@@ -97,8 +97,17 @@ export async function updateProjectEstimate(id: string, result: ImageEstimate): 
   throw new Error(error.message);
 }
 
+/**
+ * Throws like every other write here. If this fails silently the row stays
+ * at "processing" for ever - a permanent "Scanning..." card that cannot be
+ * opened - so the caller has to know.
+ */
 export async function markProjectError(id: string, message: string): Promise<void> {
-  await supabase.from("projects").update({ status: "error", error_message: message }).eq("id", id);
+  const { error } = await supabase
+    .from("projects")
+    .update({ status: "error", error_message: message })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
 export async function listProjects(): Promise<Project[]> {

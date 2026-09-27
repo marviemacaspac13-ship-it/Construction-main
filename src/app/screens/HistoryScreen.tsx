@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { listProjects, type Project } from "../../lib/projects";
-import { SectionBar, Mono } from "../components/ui";
+import { SectionBar, Mono, LoadError } from "../components/ui";
 
 const PAGE_SIZE = 8;
 const peso = (n: number) => `₱${n.toLocaleString("en-PH")}`;
@@ -143,9 +143,18 @@ export function HistoryScreen() {
   const [openDropdown, setOpenDropdown] = useState<"planType" | "date" | "status" | null>(null);
   const filterBarRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    listProjects().then(setProjects).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  const [error, setError] = useState("");
+
+  const load = () => {
+    setLoading(true);
+    setError("");
+    listProjects()
+      .then(setProjects)
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load projects."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -206,6 +215,8 @@ export function HistoryScreen() {
         <p className="text-[12px] font-mono text-muted-foreground flex items-center gap-2 mb-8">
           <Loader2 size={12} className="animate-spin-slow" /> Loading history…
         </p>
+      ) : error ? (
+        <LoadError message={error} onRetry={load} />
       ) : (
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Top statistics */}

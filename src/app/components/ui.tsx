@@ -1,4 +1,5 @@
 import React from "react";
+import { AlertTriangle } from "lucide-react";
 
 export function Mono({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -46,6 +47,25 @@ export function Btn({
       {icon && <span className="shrink-0">{icon}</span>}
       {children}
     </button>
+  );
+}
+
+/**
+ * Shown in place of a screen's content when its data failed to load.
+ *
+ * A failed load must never fall through to the empty state: "0 projects,
+ * ₱0" reads as an empty account, not as "I could not reach the server".
+ */
+export function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="border border-red-900/50 rounded-lg p-6 bg-red-950/20 flex items-start gap-3 mb-8">
+      <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] font-mono text-red-400 mb-1">Couldn't load your projects</p>
+        <p className="text-[11px] font-mono text-muted-foreground mb-4">{message}</p>
+        <Btn variant="secondary" onClick={onRetry}>Retry</Btn>
+      </div>
+    </div>
   );
 }
 
