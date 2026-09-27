@@ -191,13 +191,19 @@ class EstimatingParams(BaseModel):
     # defaults below sit inside both.
     main_run_m_per_fixture: float = Field(1.5, ge=0, le=50)
 
-    def tagged_assumptions(self) -> list[tuple[str, str]]:
+    def tagged_assumptions(
+        self, columns_counted: int | None = None
+    ) -> list[tuple[str, str]]:
         """Every assumption, paired with the rule family it belongs to.
 
         Tagged rather than filtered by plan type, so a rule brings its own
         assumption and nothing has to be kept in sync by hand. The waste
         allowances are split the same way: an electrical estimate has no
         business declaring a mortar allowance.
+
+        `columns_counted` is how many columns were counted on the drawing,
+        if they were. Then the spacing is not an assumption this estimate
+        rests on, and saying it was would misdescribe it.
         """
         lines: list[tuple[str, str]] = [
             (
@@ -282,9 +288,18 @@ class EstimatingParams(BaseModel):
                 ),
                 (
                     "structural",
-                    f"Where the frame SITS is still assumed: columns at "
-                    f"{self.column_spacing_m:g} m o.c. round the envelope"
-                    + (", and a perimeter tie beam." if self.include_perimeter_beam else "."),
+                    (
+                        f"Columns were counted on the drawing: {columns_counted}, interior "
+                        f"ones included, each on its own footing. Only the tie beam is "
+                        f"still assumed"
+                        + (" - one round the perimeter." if self.include_perimeter_beam else ".")
+                    )
+                    if columns_counted
+                    else (
+                        f"Where the frame SITS is still assumed: columns at "
+                        f"{self.column_spacing_m:g} m o.c. round the envelope"
+                        + (", and a perimeter tie beam." if self.include_perimeter_beam else ".")
+                    ),
                 ),
                 (
                     "structural",
@@ -301,7 +316,11 @@ class EstimatingParams(BaseModel):
             ]
         return lines
 
-    def assumption_lines(self, families: Collection[str] | None = None) -> list[str]:
+    def assumption_lines(
+        self,
+        families: Collection[str] | None = None,
+        columns_counted: int | None = None,
+    ) -> list[str]:
         """Assumptions that actually applied to an estimate.
 
         `families` is the set of rule families that fired - "structural",
@@ -314,6 +333,6 @@ class EstimatingParams(BaseModel):
         """
         return [
             text
-            for family, text in self.tagged_assumptions()
+            for family, text in self.tagged_assumptions(columns_counted)
             if families is None or family in families
         ]

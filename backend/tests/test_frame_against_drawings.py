@@ -38,11 +38,15 @@ drawing and concrete is priced by volume, so `COLUMN_SECTION_M` is not
 challenged by this - but "confirmed to 1%" was never true, and the
 tolerance below reflects the real gap rather than the flattering one.
 
-**Nothing here feeds a price**, deliberately. The detection works on
-`01.png`, partly on `03.png`, and not at all on the two 0.6 MP scans, so it
-could not replace the assumption even if the assumption were wrong. What
-it does is pin the agreement, so a future change to `COLUMN_SECTION_M`
-that drifts away from what the drawings actually show will fail here.
+**The section measured here feeds no price**, deliberately. Measuring it
+needs the per-axis scale, which is confirmed on only two plans of four. What
+this file does is pin the agreement, so a future change to
+`COLUMN_SECTION_M` that drifts away from what the drawings actually show
+will fail here.
+
+The column COUNT is different: a count needs no scale, and since 27 Sep
+2026 it prices - app.extract.columns counts the squares, frame.py uses the
+count when it is plausible. That is pinned in tests/test_columns.py.
 """
 
 from pathlib import Path
@@ -188,12 +192,12 @@ def test_the_assumed_spacing_sits_inside_the_real_range(measured):
 
 
 def test_the_measurement_feeds_no_price(measured):
-    """A guard on intent, not on arithmetic.
+    """A guard on intent, not on arithmetic: the drawn SECTION is not priced.
 
-    The detection works on this plan, partly on `03.png` and not at all on
-    the 0.6 MP scans, so it cannot be a pricing input. If someone wires it
-    to one, `frame.py` must stop taking the section from a constant - and
-    this assertion is where they will find out.
+    Measuring it needs a scale trusted on only two plans of four. If someone
+    wires it in, `frame.py` must stop taking the section from a constant -
+    and this assertion is where they will find out. (The drawn COUNT does
+    price, through app.extract.columns; that needs no scale.)
     """
     from app.takeoff import frame
 

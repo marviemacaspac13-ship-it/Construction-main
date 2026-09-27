@@ -20,7 +20,7 @@ from app.takeoff.constants import (
     COLUMN_STANDARD_HEIGHT_M,
     FOOTING_SIDE_M,
 )
-from app.takeoff.frame import column_count, derive_frame
+from app.takeoff.frame import column_count, derive_frame, plausible_column_count
 from app.takeoff.params import EstimatingParams
 from tests.fixtures.sample_plans import ALL_PLANS, CAD_WIDE, KERALA
 
@@ -53,6 +53,66 @@ def test_even_a_tiny_building_gets_its_four_corners():
 
 def test_no_envelope_means_no_columns():
     assert column_count(0.0, 0.0, 3.5) == 0
+
+
+# --- columns counted on the drawing --------------------------------------
+# app.extract.columns counts the solid squares a CAD plan draws. The frame
+# uses that count when it is plausible for the envelope and falls back to
+# the spacing when it is not - a sketch or scan finds 0-2, and that must
+# never become a 2-column building.
+
+def test_a_plausible_drawn_count_replaces_the_spacing():
+    frame = derive_frame(14.0, 11.0, DEFAULTS, drawn_columns=16)
+    assert frame.column_count == 16 and frame.columns_counted
+    by_id = {e.id: e for e in frame.elements}
+    # One footing under each counted column, and both say they were counted.
+    assert by_id["columns"].count == by_id["footings"].count == 16
+    assert by_id["columns"].counted and by_id["footings"].counted
+    # The slab and beam do not depend on columns and must not move.
+    base = derive_frame(14.0, 11.0, DEFAULTS)
+    assert frame.slab_volume_m3 == base.slab_volume_m3
+    assert frame.beam_volume_m3 == base.beam_volume_m3
+
+
+@pytest.mark.parametrize("drawn", [None, 0, 1, 2, 7, 23, 60])
+def test_an_implausible_count_falls_back_to_the_spacing(drawn):
+    """14 x 11 m expects 15. Half of that and below, or 1.5x and above, is a
+    failed detection: the 0-2 a sketch or scan finds, or stray solid shapes."""
+    frame = derive_frame(14.0, 11.0, DEFAULTS, drawn_columns=drawn)
+    assert frame.column_count == 15 and not frame.columns_counted
+    assert not any(e.counted for e in frame.elements)
+
+
+def test_the_plausible_band_holds_both_real_cad_plans():
+    """01.png draws 16 on 14 x 11 m (expects 15); 03.png 10 on 11.5 x 10 m
+    (expects 13). Tightening the band past 0.77 would throw away 03.png."""
+    assert plausible_column_count(16, 14.0, 11.0, 3.5)
+    assert plausible_column_count(10, 11.5, 10.0, 3.5)
+
+
+def test_a_counted_frame_says_so_in_its_warning():
+    warnings = extract_plan(
+        CAD_WIDE.envelope_w, CAD_WIDE.envelope_l, CAD_WIDE.room_blocks,
+        CAD_WIDE.chains, CAD_WIDE.opening_tags, drawn_columns=16,
+    ).warnings()
+    assert any("16 columns (counted on the drawing)" in w for w in warnings)
+
+
+def test_the_ledger_says_counted_instead_of_assumed_spacing():
+    counted = DEFAULTS.assumption_lines(columns_counted=16)
+    assert any("Columns were counted on the drawing: 16" in a for a in counted)
+    assert not any("still assumed: columns at" in a for a in counted)
+    # Without a count the spacing assumption is stated exactly as before.
+    assert any("still assumed: columns at 3.5 m" in a for a in DEFAULTS.assumption_lines())
+
+
+def test_an_estimate_from_a_counted_frame_carries_the_counted_line(catalog):
+    extraction = extract_plan(
+        CAD_WIDE.envelope_w, CAD_WIDE.envelope_l, CAD_WIDE.room_blocks,
+        CAD_WIDE.chains, CAD_WIDE.opening_tags, drawn_columns=16,
+    )
+    result = estimate_plan(to_plan_schema(extraction), catalog)
+    assert any("Columns were counted on the drawing: 16" in a for a in result.assumptions)
 
 
 # --- volumes ------------------------------------------------------------
@@ -135,13 +195,14 @@ def test_the_frame_reaches_the_plan_schema():
 
 def test_an_assumed_frame_says_so():
     warnings = plan_of(CAD_WIDE).warnings()
-    assert any("Concrete is assumed, not read" in w for w in warnings)
+    assert any("Concrete is mostly assumed, not read" in w for w in warnings)
+    assert any("assumed from the envelope, not drawn" in w for w in warnings)
 
 
 def test_switching_the_frame_off_removes_both_concrete_and_its_warning():
     extraction = plan_of(CAD_WIDE, NO_FRAME)
     assert to_plan_schema(extraction).concrete == []
-    assert not any("Concrete is assumed" in w for w in extraction.warnings())
+    assert not any("Concrete is mostly assumed" in w for w in extraction.warnings())
 
 
 def test_the_guide_sections_are_stated_on_every_estimate():

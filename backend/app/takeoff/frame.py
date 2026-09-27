@@ -12,10 +12,12 @@ guess of 0.30 x 0.30 against a true 0.20 x 0.20 is 2.25x the cement.
 Callers are expected to say so out loud; extract_plan raises a warning and
 params.assumption_lines() states the sections used.
 
-The eventual replacement is measurement, not a better guess: the black
-squares on a CAD plan are the columns, and Scale.meters_per_pixel turns
-their pixel size into a real section. This module is what stands in until
-that exists.
+The replacement is measurement, not a better guess, and it has begun: the
+black squares on a CAD plan are the columns, and app.extract.columns
+counts them. Where a plausible count is passed in, it sets how many
+columns and footings there are - interior ones included - and the spacing
+assumption stands down. Their SECTION is still the guide constant; sizing
+them needs the ruler in scale.py, which is not yet trusted.
 """
 
 import math
@@ -45,6 +47,8 @@ class FrameDerivation:
     beam_length_m: float = 0.0
     beam_volume_m3: float = 0.0
     elements: list[ConcreteElement] = field(default_factory=list)
+    # The columns were counted on the drawing, not placed at a spacing.
+    columns_counted: bool = False
 
     @property
     def total_volume_m3(self) -> float:
@@ -69,8 +73,29 @@ def column_count(envelope_w_m: float, envelope_l_m: float, spacing_m: float) -> 
     return max(4, math.ceil(perimeter / spacing_m))
 
 
+# A drawn count is trusted only near what the envelope implies. Far below
+# means the sheet does not draw its columns - a hand sketch or a scan finds
+# 0-2 - and far above means something else on the sheet is solid and square.
+# Either is a failed detection, not a discovery about the building. The two
+# CAD plans sit at 1.07 (16 vs 15) and 0.77 (10 vs 13).
+PLAUSIBLE_COLUMNS_LOW, PLAUSIBLE_COLUMNS_HIGH = 0.5, 1.5
+
+
+def plausible_column_count(
+    counted: int, envelope_w_m: float, envelope_l_m: float, spacing_m: float
+) -> bool:
+    """Whether a count of drawn columns is close enough to be believed."""
+    expected = column_count(envelope_w_m, envelope_l_m, spacing_m)
+    if counted < 4 or expected == 0:
+        return False
+    return PLAUSIBLE_COLUMNS_LOW * expected <= counted <= PLAUSIBLE_COLUMNS_HIGH * expected
+
+
 def derive_frame(
-    envelope_w_m: float, envelope_l_m: float, params: EstimatingParams
+    envelope_w_m: float,
+    envelope_l_m: float,
+    params: EstimatingParams,
+    drawn_columns: int | None = None,
 ) -> FrameDerivation | None:
     """Footings, columns and a slab on grade for a rectangular envelope.
 
@@ -78,16 +103,26 @@ def derive_frame(
     frame switched off - so that callers can tell "no concrete" apart from
     "zero concrete".
 
-    Interior columns are not counted. A residential span is usually carried
-    by the perimeter frame and the CHB walls, and inventing interior columns
-    from an envelope alone would be guessing on top of guessing.
+    `drawn_columns` is the number of columns counted on the drawing. It is
+    used when it is plausible for the envelope, and it includes interior
+    columns. Otherwise - hand sketches and scans draw none - columns are
+    placed round the perimeter at `column_spacing_m`, and interior ones are
+    NOT invented: guessing them from an envelope alone would be guessing on
+    top of guessing.
     """
     if not params.include_frame:
         return None
     if envelope_w_m <= 0 or envelope_l_m <= 0:
         return None
 
-    count = column_count(envelope_w_m, envelope_l_m, params.column_spacing_m)
+    counted = drawn_columns is not None and plausible_column_count(
+        drawn_columns, envelope_w_m, envelope_l_m, params.column_spacing_m
+    )
+    count = (
+        drawn_columns
+        if counted
+        else column_count(envelope_w_m, envelope_l_m, params.column_spacing_m)
+    )
     perimeter_m = 2.0 * (envelope_w_m + envelope_l_m)
 
     # Sections and the column height are the guide standard, not knobs.
@@ -121,6 +156,7 @@ def derive_frame(
                 width_m=FOOTING_SIDE_M,
                 length_m=FOOTING_SIDE_M,
                 height_m=params.footing_thickness_m,
+                counted=counted,
             )
         )
     if columns_m3 > 0:
@@ -134,6 +170,7 @@ def derive_frame(
                 width_m=col_w,
                 length_m=col_d,
                 height_m=COLUMN_STANDARD_HEIGHT_M,
+                counted=counted,
             )
         )
     if beams_m3 > 0:
@@ -172,4 +209,5 @@ def derive_frame(
         beam_length_m=beam_length_m,
         beam_volume_m3=beams_m3,
         elements=elements,
+        columns_counted=counted,
     )

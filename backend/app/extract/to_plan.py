@@ -96,14 +96,20 @@ class PlanExtraction:
         # concrete lines by its square, and the slab alone is usually the
         # largest single volume in the estimate.
         if self.frame is not None:
+            placed = (
+                "counted on the drawing"
+                if self.frame.columns_counted
+                else "assumed from the envelope, not drawn"
+            )
             out.append(
-                f"Concrete is assumed, not read: {self.frame.column_count} columns of "
-                f"{self.frame.column_volume_m3:.2f} m^3 total, {self.frame.column_count} "
-                f"footings of {self.frame.footing_volume_m3:.2f} m^3, and a slab of "
-                f"{self.frame.slab_volume_m3:.2f} m^3 over {self.frame.slab_area_m2:.1f} "
-                f"m^2 - {self.frame.total_volume_m3:.2f} m^3 in all. No plan states its "
-                f"column schedule, so the sections come from settings; concrete scales "
-                f"with the square of the section, so check them before ordering."
+                f"Concrete is mostly assumed, not read: {self.frame.column_count} columns "
+                f"({placed}) of {self.frame.column_volume_m3:.2f} m^3 total, "
+                f"{self.frame.column_count} footings of {self.frame.footing_volume_m3:.2f} "
+                f"m^3, and a slab of {self.frame.slab_volume_m3:.2f} m^3 over "
+                f"{self.frame.slab_area_m2:.1f} m^2 - {self.frame.total_volume_m3:.2f} m^3 "
+                f"in all. No plan states its column schedule, so the sections come from "
+                f"settings; concrete scales with the square of the section, so check "
+                f"them before ordering."
             )
         if not self.rooms_m:
             out.append("No room dimensions were read; wall lengths cannot be derived.")
@@ -117,11 +123,14 @@ def extract_plan(
     chains: list[tuple[list[float], float]] | None = None,
     opening_tags: list[str] | None = None,
     params: EstimatingParams | None = None,
+    drawn_columns: int | None = None,
 ) -> PlanExtraction:
     """Turn raw text read off a plan into a validated, metric extraction.
 
     envelope_w/envelope_l and the chain values are in the drawing's own
     units; the unit inference converts everything to metres.
+    `drawn_columns` is the count from app.extract.columns, when there is an
+    image to count on; derive_frame decides whether to believe it.
     """
     units = infer_units(max(envelope_w, envelope_l))
 
@@ -171,7 +180,7 @@ def extract_plan(
     )
     extraction.walls = derive_walls(rooms_m, w_m, l_m)
     extraction.area = check_area(rooms_m, w_m, l_m, extraction.walls.total_m)
-    extraction.frame = derive_frame(w_m, l_m, params)
+    extraction.frame = derive_frame(w_m, l_m, params, drawn_columns)
     return extraction
 
 

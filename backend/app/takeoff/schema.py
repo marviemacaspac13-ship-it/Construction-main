@@ -124,6 +124,10 @@ class ConcreteElement(BaseModel):
     width_m: Optional[float] = Field(None, gt=0)
     length_m: Optional[float] = Field(None, gt=0)
     height_m: Optional[float] = Field(None, gt=0)
+    # True when `count` was read off the drawing (columns and the footings
+    # under them, app.extract.columns) rather than derived from a spacing.
+    # The ledger needs it: "16 columns" reads the same either way.
+    counted: bool = False
 
     @property
     def is_reinforceable(self) -> bool:

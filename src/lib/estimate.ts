@@ -74,6 +74,8 @@ export type ExtractionReport = {
   /** Concrete is derived from the envelope and assumed sections, never read.
    *  Null means no frame was derived - not a frame of zero volume. */
   column_count: number | null;
+  /** True when column_count was counted on the drawing, not assumed. */
+  columns_counted: boolean;
   concrete_volume_m3: number | null;
   chains: ChainReport[];
   confidence: number;

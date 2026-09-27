@@ -196,17 +196,24 @@ def test_real_plan_image_prices_end_to_end():
     assert any("assumed from" in w for w in ex["warnings"])
     assert ex["doors"] == 10 and ex["windows"] == 10
 
-    # Concrete is derived from the envelope, never read, and says so.
-    assert ex["column_count"] == 15
-    assert ex["concrete_volume_m3"] == pytest.approx(27.65, abs=0.01)
-    assert any("Concrete is assumed, not read" in w for w in ex["warnings"])
+    # The columns are COUNTED: this CAD plan draws 16 solid squares, three of
+    # them interior. The 3.5 m spacing it replaced gave 15. The rest of the
+    # concrete - sections, slab, beam - is still assumed, and says so.
+    assert ex["column_count"] == 16
+    assert ex["columns_counted"] is True
+    assert ex["concrete_volume_m3"] == pytest.approx(28.20, abs=0.01)
+    assert any("16 columns (counted on the drawing)" in w for w in ex["warnings"])
+    assert any("Concrete is mostly assumed, not read" in w for w in ex["warnings"])
 
     est = body["estimate"]
     # 308,356.26 until 24 Sep 2026, when the default wall height moved from
     # an unsourced 3.0 m to the Guide.docx standard wall's 2.70 m (300,006.96).
     # Then 25 Sep: footings 0.20 -> 0.25 m, the NSCP's 150 mm read as depth
-    # above the bars rather than overall - +1.6%, footing concrete only.
-    assert est["grand_total"] == pytest.approx(304787.34, abs=0.01)
+    # above the bars rather than overall - +1.6%, footing concrete only
+    # (304,787.34). 27 Sep: the 16 drawn columns replace the 15 the 3.5 m
+    # spacing placed - one more column and footing, +1.5%.
+    assert est["grand_total"] == pytest.approx(309364.97, abs=0.01)
+    assert any("Columns were counted on the drawing: 16" in a for a in est["assumptions"])
     assert est["unpriced"] == []
     assert {li["item_id"] for li in est["line_items"]} >= {
         "CHB01", "CHB02", "CMT01", "SND02", "DB01", "GI01",

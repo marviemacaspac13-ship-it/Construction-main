@@ -42,9 +42,11 @@ class ExtractionReport(BaseModel):
     total_wall_m: float
     doors: int
     windows: int
-    # Concrete is derived from the envelope and the assumed sections, never
-    # read off the plan. Null means no frame was derived at all.
+    # Concrete is derived from the envelope and the assumed sections. Null
+    # means no frame was derived at all. The column COUNT is read off the
+    # drawing where it draws them; columns_counted says whether it was.
     column_count: int | None = None
+    columns_counted: bool = False
     concrete_volume_m3: float | None = None
     chains: list[ChainReport]
     confidence: float
@@ -86,6 +88,7 @@ def report_from_extraction(extraction: PlanExtraction) -> ExtractionReport:
         doors=extraction.doors,
         windows=extraction.windows,
         column_count=extraction.frame.column_count if extraction.frame else None,
+        columns_counted=bool(extraction.frame and extraction.frame.columns_counted),
         concrete_volume_m3=(
             round(extraction.frame.total_volume_m3, 2) if extraction.frame else None
         ),

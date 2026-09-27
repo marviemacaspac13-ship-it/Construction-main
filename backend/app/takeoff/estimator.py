@@ -99,6 +99,7 @@ def estimate_from_bom(
     plan_type: str,
     params: EstimatingParams,
     source: str = "manual",
+    columns_counted: int | None = None,
 ) -> EstimateResponse:
     priced: list[PricedLine] = []
     unpriced: list[BomLine] = []
@@ -139,7 +140,8 @@ def estimate_from_bom(
         unpriced=unpriced,
         grand_total=round(grand_total, 2),
         assumptions=(
-            params.assumption_lines(_families_in(bom)) + _source_assumptions(source)
+            params.assumption_lines(_families_in(bom), columns_counted)
+            + _source_assumptions(source)
         ),
     )
 
@@ -152,4 +154,9 @@ def estimate_plan(
     """Full path: PlanSchema -> rules -> BOM -> priced estimate."""
     params = params or EstimatingParams()
     bom = rules_for(plan.plan_type)(plan, params)
-    return estimate_from_bom(bom, catalog, plan.plan_type, params, plan.source)
+    columns_counted = next(
+        (c.count for c in plan.concrete if c.kind == "column" and c.counted), None
+    )
+    return estimate_from_bom(
+        bom, catalog, plan.plan_type, params, plan.source, columns_counted
+    )
