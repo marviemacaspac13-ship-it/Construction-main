@@ -47,6 +47,17 @@ export function ScanningScreen() {
   // Survives a failed scan so "Back to Upload" can hand the existing row
   // back instead of orphaning it.
   const created = useRef<string | null>(projectId ?? null);
+  // Whether the user is still on this screen. Its own effect, NOT a flag
+  // cleared in the scan effect's cleanup: StrictMode runs that cleanup once
+  // right after mount, `ran` stops the scan effect from re-running, and the
+  // flag would then say "left" for the whole scan - so no scan would ever
+  // reach Results. This one sets itself back to true on the remount.
+  const onScreen = useRef(true);
+
+  useEffect(() => {
+    onScreen.current = true;
+    return () => { onScreen.current = false; };
+  }, []);
 
   const planType = draft?.planType;
   const readsDimensions = readsPrintedDimensions(planType);
@@ -81,6 +92,11 @@ export function ScanningScreen() {
     // One endpoint for every plan type. Floor plans are read from their
     // printed dimensions; the rest are counted against uploaded symbol
     // references. The backend picks the path and prices both the same way.
+    //
+    // Leaving mid-scan does NOT cancel it: the row is still saved as
+    // completed or error, and shows up on Projects. What stops is everything
+    // that touches this screen - above all the jump to Results, which used
+    // to pull the user off whatever page they had moved on to (audit FLOW-01).
     (async () => {
       try {
         if (!created.current) {
@@ -92,15 +108,21 @@ export function ScanningScreen() {
         await updateProjectEstimate(id, result);
 
         clearInterval(tick);
+        if (!onScreen.current) return;
         setProgress(100);
         setStep(steps.length - 1);
-        setTimeout(() => navigate("/results", { state: { projectId: id } }), 500);
+        // Checked again: the user can still leave during this half second.
+        setTimeout(() => {
+          if (onScreen.current) navigate("/results", { state: { projectId: id } });
+        }, 500);
       } catch (e) {
         clearInterval(tick);
         const message = e instanceof Error ? e.message : "Scan failed.";
-        setError(message);
+        if (onScreen.current) setError(message);
         if (created.current) {
-          await markProjectError(created.current, message).catch(() => setUnmarked(true));
+          await markProjectError(created.current, message).catch(() => {
+            if (onScreen.current) setUnmarked(true);
+          });
         }
       }
     })();
