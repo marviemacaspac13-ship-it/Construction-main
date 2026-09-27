@@ -10,6 +10,7 @@ export function SymbolLibraryScreen() {
   const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState<{ itemId: string; filename: string } | null>(null);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const refresh = () => {
@@ -34,7 +35,29 @@ export function SymbolLibraryScreen() {
     }
   };
 
+  // What removing one crop does to scanning, worst case first. Only the
+  // electrical route prices from these crops (plumbing reads printed tags).
+  // An item with no crop left is the dangerous case: its trade still has
+  // references, so scans succeed - they just stop finding it and price lower.
+  const deleteConsequence = (itemId: string): { severe: boolean; text: string } => {
+    const category = materials.find((m) => m.item_id === itemId)?.category;
+    if (category === "electrical") {
+      const tradeLeft =
+        materials
+          .filter((m) => m.category === "electrical")
+          .reduce((n, m) => n + (templates[m.item_id] ?? []).length, 0) - 1;
+      if (tradeLeft === 0) {
+        return { severe: true, text: "This is the last electrical crop. Every Electrical Plan scan will be refused until one is added." };
+      }
+      if ((templates[itemId] ?? []).length - 1 === 0) {
+        return { severe: true, text: `${itemId} will no longer be detected on any plan. Estimates will come out lower, with no warning.` };
+      }
+    }
+    return { severe: false, text: "The symbol library is shared, so this changes scans for every user." };
+  };
+
   const handleDelete = async (itemId: string, filename: string) => {
+    setConfirming(null);
     setTemplates((t) => ({ ...t, [itemId]: (t[itemId] ?? []).filter((f) => f !== filename) }));
     try {
       await deleteTemplate(itemId, filename);
@@ -104,11 +127,43 @@ export function SymbolLibraryScreen() {
                   {files.map((f) => (
                     <span key={f} className="flex items-center gap-1.5 px-2 py-1 border border-border rounded-md text-[10px] font-mono text-muted-foreground">
                       {f.slice(0, 10)}…
-                      <button onClick={() => handleDelete(m.item_id, f)} className="text-muted-foreground hover:text-red-400 press-scale">
+                      <button
+                        onClick={() => setConfirming({ itemId: m.item_id, filename: f })}
+                        title={`Delete ${f}`}
+                        className="text-muted-foreground hover:text-red-400 press-scale"
+                      >
                         <Trash2 size={10} />
                       </button>
                     </span>
                   ))}
+
+                  {confirming?.itemId === m.item_id && (() => {
+                    const consequence = deleteConsequence(m.item_id);
+                    return (
+                      <div className="basis-full mt-1 p-3 border border-red-900/50 rounded-md bg-red-950/10 animate-pop-in">
+                        <p className="text-[10px] font-mono text-muted-foreground mb-1 leading-relaxed">
+                          Delete <span className="text-foreground break-all">"{confirming.filename}"</span>? This can't be undone here.
+                        </p>
+                        <p className={`text-[10px] font-mono mb-3 leading-relaxed ${consequence.severe ? "text-orange-400" : "text-muted-foreground"}`}>
+                          {consequence.text}
+                        </p>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleDelete(confirming.itemId, confirming.filename)}
+                            className="h-7 px-4 rounded border border-red-900/50 text-[10px] font-mono text-red-400 hover:bg-red-950 press-scale transition-colors"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirming(null)}
+                            className="h-7 px-4 rounded border border-border text-[10px] font-mono text-muted-foreground hover:bg-accent press-scale transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <button
