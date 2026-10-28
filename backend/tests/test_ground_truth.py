@@ -6,11 +6,16 @@ statement about how well symbol matching works on this corpus is an
 impression. Between them they set the match threshold and they are what
 says whether it generalises.
 
-`05.png` (15 Sep) - a combined lighting and power plan.
+`05.png` (recount 13 Oct) - a combined lighting and power plan.
 
-    Ceiling outlets (CLR01), 21:
-        Living 5, Porch 5, Dining 3, Garden/exterior 2, Bedroom 1,
-        Bedroom 2, Master, Garage, Kitchen, Toilet & Bath 1 each
+    Visible light points, 23 (provisional visual recount):
+        Bedroom 1 1, Bedroom 2 2, Dining 3, Toilet & Bath 1,
+        Kitchen 2, Garage 1, Master 1, Living 3,
+        Garden/exterior run 4, Porch 5.
+    The earlier count was 21. The owner marked six missed light points and
+    two missed convenience outlets on the detector overlay. All 33 current
+    detector hits were visually inspected by Codex on 13 Oct, without an
+    independent second annotator; see datasets/electrical-audit/VISUAL_REVIEW_05.md.
 
     Convenience outlets (OT01), 18 - RECOUNTED 25 Sep. The first count
     said 14, including the kWh meter. A recount against a numbered overlay
@@ -19,6 +24,8 @@ says whether it generalises.
     them. Two hits the old crops made - a door jamb in the dining area and
     a wall line on the porch - are confirmed as NOT outlets, so the old
     claim that every detection at 0.66 was real was wrong.
+    The 13 Oct marked overlay identifies two current outlet misses: the
+    master's bedroom east wall and the porch right wall, consistent with 18.
 
 `10.png` (24 Sep) - a POWER layout by a third draughtsman, clean CAD at
 0.44 MP. Convenience outlets 14, ceiling outlets none - it draws no
@@ -57,7 +64,7 @@ COMBINED = PLANS / "05.png"
 LIGHTING = PLANS / "Data Set" / "Electricalplan" / "IMAGE" / "08.png"
 POWER = PLANS / "Data Set" / "Electricalplan" / "IMAGE" / "10.png"
 
-COMBINED_CEILING, COMBINED_CONVENIENCE = 21, 18
+COMBINED_CEILING, COMBINED_CONVENIENCE = 23, 18
 LIGHTING_CEILING, LIGHTING_CONVENIENCE = 19, 0
 POWER_CEILING, POWER_CONVENIENCE = 0, 14
 
@@ -96,17 +103,42 @@ def centres(detections):
 # --- 05.png, the combined plan ------------------------------------------
 
 def test_combined_no_count_exceeds_the_hand_count(combined):
-    """Over the truth means noise, the cheaper failure to hit."""
+    """Guard against a count exceeding the provisional visual recount."""
     counts = Counter(d.label for d in combined)
     assert counts["CLR01"] <= COMBINED_CEILING
     assert counts["OT01"] <= COMBINED_CONVENIENCE
 
 
 def test_combined_ceiling_outlet_recall(combined):
-    """16 of 21. The 16th (27 Sep) is a plain circle on the dining-area
-    lighting circuit, found by the pendant-fixture legend crop."""
+    """17 of 23 after the supplied appendix crop (11 Oct; denominator recounted 13 Oct).
+
+    The new location is checked separately below: matching a total alone
+    would allow a false positive to conceal a missed light.
+    """
     counts = Counter(d.label for d in combined)
-    assert counts["CLR01"] / COMBINED_CEILING >= 0.70
+    assert counts["CLR01"] >= 17
+
+
+def test_supplied_appendix_recovers_the_living_area_corner_light(combined):
+    """Hand-checked circle at the lower-left of the living-area circuit."""
+    lights = [d for d in combined if d.label == "CLR01"]
+    assert any(dist(c, (315.5, 295.5)) < 5 for c in centres(lights))
+
+
+def test_supplied_appendix_does_not_price_bedroom_text_as_a_light():
+    """Rejected crop orientations read the O in BEDROOM 2 and crossed MIN_DEVICES.
+
+    A 13 Oct whole-sheet visual count found nine genuine lights, all currently
+    matched. The sheet is nevertheless refused by the ten-device minimum;
+    that limit protects other sparse false matches and is not an accuracy
+    score for this particular sheet.
+    """
+    path = PLANS / "Data Set" / "Electricalplan" / "IMAGE" / "11.png"
+    if not path.exists():
+        pytest.skip("data set not present")
+    detections = detect(path)
+    assert len(detections) < 10
+    assert all(dist(c, (210.5, 232.5)) >= 12 for c in centres(detections))
 
 
 def test_combined_convenience_outlet_recall(combined):
@@ -165,8 +197,9 @@ def test_lighting_convenience_outlets_are_mislabels_and_stay_few(lighting):
 def test_power_outlets_are_found_on_a_third_drawing(power):
     """9 of 14. It was 0 of 14 with crops cut from 05.png.
 
-    The five missed are mostly the outlets carrying a label beside them
-    (ACU, REF, R), where the text touches the symbol. Every one of the 9
+    The five missed locations were recorded on 13 Oct: bedroom/dining
+    partition, ACU, REF, R and lower kitchen wall. The REF symbol is partly
+    obscured by nearby drawing content. Every one of the 9 detected hits
     was checked by eye and sits on a real outlet.
     """
     counts = Counter(d.label for d in power)

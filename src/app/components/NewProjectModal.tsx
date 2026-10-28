@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import { Btn, FieldWrap, TxtArea, Mono } from "./ui";
 import type { ProjectDraft } from "../../lib/projects";
+import { DEFAULT_WALL_HEIGHT_M, MAX_WALL_HEIGHT_M, parseWallHeight } from "../../lib/wall-height";
+import { planFileError } from "../../lib/plan-assets";
+import { uploadTips } from "../../lib/upload-guidance";
 
 type Step = 1 | 2;
 
@@ -28,6 +31,9 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [planType, setPlanType] = useState("Floor Plan");
+  const [wallHeight, setWallHeight] = useState(String(DEFAULT_WALL_HEIGHT_M));
+  const [heightError, setHeightError] = useState("");
+  const heightRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -41,6 +47,8 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
       setName("");
       setDesc("");
       setPlanType("Floor Plan");
+      setWallHeight(String(DEFAULT_WALL_HEIGHT_M));
+      setHeightError("");
       setFile(null);
       setDragging(false);
       setError("");
@@ -67,13 +75,23 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
     e.preventDefault();
     setDragging(false);
     const f = e.dataTransfer.files?.[0];
-    if (f) setFile(f);
+    if (f) {
+      const message = planFileError(f);
+      setError(message ?? "");
+      setFile(message ? null : f);
+    }
   }, []);
 
   if (!open) return null;
 
   const canContinueStep1 = name.trim().length > 0;
   const canStart = file !== null && !starting;
+  const validateHeight = () => {
+    if (planType !== "Floor Plan" || parseWallHeight(wallHeight) !== null) return true;
+    setHeightError("Enter a wall height greater than 0 and no more than 10 metres.");
+    heightRef.current?.focus();
+    return false;
+  };
 
   /**
    * Hands ScanningScreen a draft rather than creating the project here, so
@@ -82,12 +100,14 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
    */
   const handleStart = () => {
     if (!file || starting) return;
+    if (!validateHeight()) { setStep(1); return; }
     setStarting(true);
     setError("");
     const draft: ProjectDraft = {
       name: name.trim(),
       description: desc.trim(),
       planType,
+      ...(planType === "Floor Plan" ? { wallHeightM: parseWallHeight(wallHeight)! } : {}),
     };
     onClose();
     navigate("/scanning", { state: { draft, file } });
@@ -103,9 +123,9 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
       <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
 
       {/* Card */}
-      <div className="relative w-full max-w-3xl bg-card border border-border rounded-xl overflow-hidden animate-pop-in border-beam shadow-2xl">
+      <div className="relative w-full max-w-3xl max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden bg-card border border-border rounded-xl animate-pop-in border-beam shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 border border-border rounded-lg flex items-center justify-center text-muted-foreground shrink-0">
               <FolderOpen size={14} />
@@ -126,7 +146,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
         </div>
 
         {/* Step progress */}
-        <div className="flex items-center gap-2 px-6 pt-4">
+        <div className="flex items-center gap-2 px-6 pt-4 shrink-0">
           {[1, 2].map((s) => (
             <div key={s} className="flex-1 h-[2px] rounded-full bg-accent overflow-hidden">
               <div
@@ -136,13 +156,13 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-between px-6 pt-2 pb-1">
+        <div className="flex items-center justify-between px-6 pt-2 pb-1 shrink-0">
           <Mono className={step === 1 ? "text-foreground" : "opacity-50"}>01 Details</Mono>
           <Mono className={step === 2 ? "text-foreground" : "opacity-50"}>02 Upload</Mono>
         </div>
 
         {/* Body */}
-        <div className="p-6 min-h-[300px]">
+        <div className="p-6 min-h-0 overflow-y-auto">
           {step === 1 ? (
             <div className="space-y-5 animate-slide-left">
               <FieldWrap label="Project Name" hint="Give your project a clear and unique name">
@@ -176,6 +196,22 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
                   ))}
                 </div>
               </div>
+              {planType === "Floor Plan" && (
+                <div className="space-y-2">
+                  <label htmlFor="modal-wall-height" className="block text-sm font-mono text-foreground">Wall height (m)</label>
+                  <p id="modal-height-help" className="text-sm text-muted-foreground">Applies to all walls. Default: 2.70 m.</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input ref={heightRef} id="modal-wall-height" type="number" inputMode="decimal"
+                      min="0" max={MAX_WALL_HEIGHT_M} step="any" value={wallHeight}
+                      onChange={(e) => { setWallHeight(e.target.value); setHeightError(""); }}
+                      aria-invalid={!!heightError} aria-describedby={`modal-height-help${heightError ? " modal-height-error" : ""}`}
+                      className="w-full sm:w-40 h-11 bg-background border border-border rounded-lg px-3 text-base font-mono text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground" />
+                    <button type="button" onClick={() => { setWallHeight(String(DEFAULT_WALL_HEIGHT_M)); setHeightError(""); }}
+                      className="min-h-11 px-3 text-sm text-foreground underline underline-offset-4 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground">Reset to 2.70 m</button>
+                  </div>
+                  {heightError && <p id="modal-height-error" role="alert" className="text-sm text-red-400">{heightError}</p>}
+                </div>
+              )}
             </div>
           ) : (
             <div className="animate-slide-right">
@@ -217,7 +253,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
                   <>
                     <div className="text-center">
                       <p className="text-[12px] font-mono text-muted-foreground mb-1">Drag and drop your plan file here</p>
-                      <p className="text-[10px] font-mono text-muted-foreground/50">PNG, JPG, PDF supported</p>
+                      <p className="text-[10px] font-mono text-muted-foreground">PNG, JPG or WebP — up to 25 MB</p>
                     </div>
                     <Btn
                       variant="secondary"
@@ -235,23 +271,33 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
                   ref={inputRef}
                   type="file"
                   className="hidden"
-                  accept="image/*,.pdf"
+                  accept="image/png,image/jpeg,image/webp"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) setFile(f);
+                    if (f) {
+                      const message = planFileError(f);
+                      setError(message ?? "");
+                      setFile(message ? null : f);
+                    }
                   }}
                 />
               </div>
               <p className="text-[10px] font-mono text-muted-foreground mt-4">
                 ⓘ Make sure the plan image is clear and legible — {planType} selected.
               </p>
+              <ul className="mt-2 space-y-1">
+                {uploadTips(planType).map((tip) => <li key={tip} className="text-[11px] text-muted-foreground">• {tip}</li>)}
+              </ul>
+              {planType === "Floor Plan" && <p className="text-sm text-muted-foreground mt-2">Wall height: {Number(wallHeight).toFixed(2)} m · All walls</p>}
+              {planType === "Plumbing Plan" && <p className="text-sm text-muted-foreground mt-2">Check every plumbing fixture location and count before confirming your estimate.</p>}
+              {planType === "Electrical Plan" && <div className="text-sm text-muted-foreground mt-2 space-y-2"><p>Review device locations and types before confirming your estimate.</p><p>Includes wire and conduit allowances for supported lights and convenience outlets. Switch and AC wiring, breakers, panels and circuit design are excluded.</p></div>}
               {error && <p className="text-[11px] font-mono text-red-400 mt-3 animate-pop-in">{error}</p>}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-background/40">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-background/40 shrink-0">
           <div className="flex items-center gap-1.5">
             {[1, 2].map((s) => (
               <div key={s} className={`w-1.5 h-1.5 rounded-full transition-colors ${step === s ? "bg-foreground" : "bg-border"}`} />
@@ -263,7 +309,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
                 <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
                 <Btn
                   variant="secondary"
-                  onClick={() => canContinueStep1 && setStep(2)}
+                  onClick={() => canContinueStep1 && validateHeight() && setStep(2)}
                   icon={<ChevronRight size={11} />}
                   className={!canContinueStep1 ? "opacity-40 cursor-not-allowed" : ""}
                 >

@@ -8,6 +8,8 @@ from.
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
+from app.plumbing_models import FixtureReview
+from app.electrical_models import ElectricalReview, PRICED_REVIEW_SKUS
 
 PlanType = Literal["Floor Plan", "Electrical Plan", "Plumbing Plan"]
 WallThickness = Literal["4in", "6in"]
@@ -128,9 +130,29 @@ class ConcreteElement(BaseModel):
     # under them, app.extract.columns) rather than derived from a spacing.
     # The ledger needs it: "16 columns" reads the same either way.
     counted: bool = False
+    # Total slab area across this element, independent of envelope dimensions.
+    slab_area_m2: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _explicit_slab_area(self):
+        if self.slab_area_m2 is not None:
+            if self.kind != "slab" or self.height_m is None:
+                raise ValueError("explicit slab area requires a slab with thickness")
+            expected = self.slab_area_m2 * self.height_m
+            if abs(self.volume_m3 - expected) > max(1e-9, expected * 1e-9):
+                raise ValueError("slab volume must equal explicit area times thickness")
+        return self
+
+    @property
+    def effective_volume_m3(self) -> float:
+        if self.slab_area_m2 is not None:
+            return self.slab_area_m2 * self.height_m
+        return self.volume_m3
 
     @property
     def is_reinforceable(self) -> bool:
+        if self.kind == "slab" and self.slab_area_m2 is not None:
+            return self.height_m is not None
         return None not in (self.width_m, self.length_m, self.height_m)
 
 
@@ -156,12 +178,26 @@ class FixtureCount(BaseModel):
     count: int = Field(ge=0)
 
 
+class FixtureTagObservation(BaseModel):
+    """One OCR-read plumbing tag, retained for visual verification."""
+
+    tag: str
+    x_px: float = Field(ge=0)
+    y_px: float = Field(ge=0)
+    score: float = Field(ge=0, le=1)
+
+
 class PlanSchema(BaseModel):
     plan_type: PlanType
+    # Confirmed correction, including zero; never passed to detector plausibility.
+    manual_column_count: Optional[int] = Field(None, ge=0, strict=True)
     scale: Optional[Scale] = None
     walls: list[Wall] = Field(default_factory=list)
     rooms: list[Room] = Field(default_factory=list)
     concrete: list[ConcreteElement] = Field(default_factory=list)
+    # Manual source geometry retained when a confirmed zero excludes a member.
+    # Not consumed by the quantity engine; permits later corrections from zero.
+    concrete_basis: list[ConcreteElement] = Field(default_factory=list)
     runs: list[Run] = Field(default_factory=list)
     fixtures: list[FixtureCount] = Field(default_factory=list)
 
@@ -172,5 +208,35 @@ class PlanSchema(BaseModel):
     # utility box behind it. Keyed by tag name, not by item_id, because
     # they have no catalog row and never will.
     fixture_tags: dict[str, int] = Field(default_factory=dict)
+    # Image-space OCR observations support review and future CV association;
+    # quantities continue to come only from fixture_tags.
+    fixture_tag_observations: list[FixtureTagObservation] = Field(default_factory=list)
+    # Immutable visual evidence from the explicitly confirmed scan. Later count
+    # corrections are separate overrides, not edits to these original boxes.
+    fixture_review: Optional[FixtureReview] = None
+    # Omit absent evidence to preserve legacy snapshot/save payload shapes.
+    electrical_review: Optional[ElectricalReview] = Field(None, exclude_if=lambda v: v is None)
 
     source: Literal["manual", "detection", "ocr", "tags", "cad"] = "manual"
+
+    @model_validator(mode='after')
+    def electrical_review_boundary(self):
+        if self.electrical_review is not None:
+            if self.plan_type != 'Electrical Plan' or self.fixture_review is not None:
+                raise ValueError('Electrical review evidence belongs only to electrical plans.')
+            self.electrical_review.require_priceable()
+            from app.electrical_models import PARTIAL_REVIEW_SKUS, REVIEWED_ESTIMATE_SCOPES
+            reviewed = self.electrical_review.estimate_scope in REVIEWED_ESTIMATE_SCOPES
+            allowed = PARTIAL_REVIEW_SKUS if reviewed else PRICED_REVIEW_SKUS
+            if any(f.item_id not in allowed for f in self.fixtures):
+                raise ValueError('Electrical review cannot activate unapproved switch/AC or other products.')
+            if reviewed:
+                from collections import Counter
+                if self.runs or self.walls or self.rooms or self.concrete or self.fixture_tags:
+                    raise ValueError('A reviewed device estimate cannot contain circuit or other trade inputs.')
+                counts = Counter()
+                for fixture in self.fixtures:
+                    counts[fixture.item_id] += fixture.count
+                if dict(counts) != self.electrical_review.priced_counts():
+                    raise ValueError('Partial device quantities must match their reviewed assemblies. Rescan to change counts.')
+        return self

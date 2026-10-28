@@ -177,6 +177,11 @@ FIXTURE_PLUMBING: dict[str, dict[str, str]] = {
     "cleanout": {},
 }
 
+# The fewest material-bearing fixtures a whole sanitary layout can carry.
+# Below it a read is a stray tag, not a plan: the tag reader refuses rather
+# than pricing or proposing it.
+MIN_FIXTURES = 3
+
 # Tags as they are printed beside the fixture, for app/extract/tags.py.
 FIXTURE_TAG_PATTERNS: dict[str, str] = {
     "water_closet": r"WC",

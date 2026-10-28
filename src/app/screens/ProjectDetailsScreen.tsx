@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FolderOpen, ChevronRight, LayoutDashboard, Zap, Layers } from "lucide-react";
 import { SectionBar, Btn, FieldWrap, Mono } from "../components/ui";
 import { useLocation, useNavigate } from "react-router";
 import type { ProjectDraft } from "../../lib/projects";
+import { DEFAULT_WALL_HEIGHT_M, MAX_WALL_HEIGHT_M, parseWallHeight } from "../../lib/wall-height";
 
 // Mirrors the trade split the backend actually reads each plan type with -
 // OCR'd dimension chains, symbol-library matching, or printed fixture tags -
@@ -13,24 +14,24 @@ const PLAN_TYPES = [
     Icon: LayoutDashboard,
     color: "text-sky-400",
     dot: "bg-sky-400",
-    tagline: "Printed room dimensions",
-    detail: "Reads the dimension chains off the sheet and derives room areas and wall lengths from them.",
+    tagline: "Rooms and walls",
+    detail: "Estimate materials for the rooms and walls shown on your plan.",
   },
   {
     id: "Electrical Plan",
     Icon: Zap,
     color: "text-orange-400",
     dot: "bg-orange-400",
-    tagline: "Symbol matching",
-    detail: "Matches devices against your Symbol Library to count outlets, switches, and fixtures.",
+    tagline: "Electrical devices",
+    detail: "Review lights, outlets and switches before confirming your estimate.",
   },
   {
     id: "Plumbing Plan",
     Icon: Layers,
     color: "text-emerald-400",
     dot: "bg-emerald-400",
-    tagline: "Fixture tag counts",
-    detail: "Counts printed fixture tags (WC, LAV, FD) and derives the pipework that serves them.",
+    tagline: "Plumbing fixtures",
+    detail: "Review fixtures and material quantities before confirming your estimate.",
   },
 ] as const;
 
@@ -52,6 +53,9 @@ export function ProjectDetailsScreen() {
   const [desc, setDesc]         = useState(draft?.description ?? "");
   const [planType, setPlanType] = useState(draft?.planType ?? "Floor Plan");
   const [error, setError]       = useState("");
+  const [wallHeight, setWallHeight] = useState(String(draft?.wallHeightM ?? DEFAULT_WALL_HEIGHT_M));
+  const [heightError, setHeightError] = useState("");
+  const heightInput = useRef<HTMLInputElement>(null);
 
   const selected = PLAN_TYPES.find((p) => p.id === planType) ?? PLAN_TYPES[0];
 
@@ -64,8 +68,18 @@ export function ProjectDetailsScreen() {
       setError("Give the project a name first.");
       return;
     }
+    const height = parseWallHeight(wallHeight);
+    if (planType === "Floor Plan" && height === null) {
+      setHeightError("Enter a wall height greater than 0 and no more than 10 metres.");
+      heightInput.current?.focus();
+      return;
+    }
     setError("");
-    const next: ProjectDraft = { name: title.trim(), description: desc.trim(), planType };
+    setHeightError("");
+    const next: ProjectDraft = {
+      name: title.trim(), description: desc.trim(), planType,
+      ...(planType === "Floor Plan" && height !== null ? { wallHeightM: height } : {}),
+    };
     navigate("/upload", { state: { draft: next, projectId } });
   };
 
@@ -112,6 +126,36 @@ export function ProjectDetailsScreen() {
                 className="w-full h-11 bg-background border border-border rounded-lg px-4 text-[13px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/30 focus:shadow-[0_0_0_3px_rgba(255,255,255,0.06)] transition-all"
               />
             </FieldWrap>
+
+            {planType === "Floor Plan" && (
+              <div className="space-y-2">
+                <label htmlFor="wall-height" className="block text-sm font-mono text-foreground">Wall height (m)</label>
+                <p id="wall-height-help" className="text-sm text-muted-foreground leading-relaxed">
+                  Applies to all walls in this floor plan. Default: 2.70 m.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    ref={heightInput}
+                    id="wall-height"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    max={MAX_WALL_HEIGHT_M}
+                    step="any"
+                    value={wallHeight}
+                    onChange={(e) => { setWallHeight(e.target.value); setHeightError(""); }}
+                    aria-invalid={!!heightError}
+                    aria-describedby={`wall-height-help${heightError ? " wall-height-error" : ""}`}
+                    className="w-full sm:w-40 h-11 bg-background border border-border rounded-lg px-4 text-base font-mono text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                  />
+                  <button type="button" onClick={() => { setWallHeight(String(DEFAULT_WALL_HEIGHT_M)); setHeightError(""); }}
+                    className="min-h-11 px-3 text-sm text-foreground underline underline-offset-4 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground">
+                    Reset to 2.70 m
+                  </button>
+                </div>
+                {heightError && <p id="wall-height-error" role="alert" className="text-sm text-red-400">{heightError}</p>}
+              </div>
+            )}
 
             <div className="flex-1 flex flex-col min-h-0">
               <FieldWrap label="Description" hint="Add a brief description that best identifies this project">

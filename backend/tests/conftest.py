@@ -6,6 +6,12 @@ import pytest
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def electrical_provider_offline(monkeypatch):
+    """Never let a developer's enabled .env turn regression tests into model calls."""
+    monkeypatch.setenv('ELECTRICAL_VISION_ENABLED','false')
+
+
 @pytest.fixture(scope="session")
 def catalog() -> dict[str, dict]:
     """The 52-SKU catalog snapshot, keyed by item_id - same shape load_catalog() returns."""

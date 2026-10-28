@@ -192,7 +192,7 @@ class EstimatingParams(BaseModel):
     main_run_m_per_fixture: float = Field(1.5, ge=0, le=50)
 
     def tagged_assumptions(
-        self, columns_counted: int | None = None
+        self, columns_counted: int | None = None, manual_column_count: int | None = None
     ) -> list[tuple[str, str]]:
         """Every assumption, paired with the rule family it belongs to.
 
@@ -289,12 +289,16 @@ class EstimatingParams(BaseModel):
                 (
                     "structural",
                     (
-                        f"Columns were counted on the drawing: {columns_counted}, interior "
-                        f"ones included, each on its own footing. Only the tie beam is "
+                        (
+                            f"Columns manually confirmed: {manual_column_count}, interior "
+                            if manual_column_count is not None else
+                            f"Columns were counted on the drawing: {columns_counted}, interior "
+                        )
+                        + f"ones included, each on its own footing. Only the tie beam is "
                         f"still assumed"
                         + (" - one round the perimeter." if self.include_perimeter_beam else ".")
                     )
-                    if columns_counted
+                    if columns_counted or manual_column_count is not None
                     else (
                         f"Where the frame SITS is still assumed: columns at "
                         f"{self.column_spacing_m:g} m o.c. round the envelope"
@@ -320,6 +324,7 @@ class EstimatingParams(BaseModel):
         self,
         families: Collection[str] | None = None,
         columns_counted: int | None = None,
+        manual_column_count: int | None = None,
     ) -> list[str]:
         """Assumptions that actually applied to an estimate.
 
@@ -333,6 +338,6 @@ class EstimatingParams(BaseModel):
         """
         return [
             text
-            for family, text in self.tagged_assumptions(columns_counted)
+            for family, text in self.tagged_assumptions(columns_counted, manual_column_count)
             if families is None or family in families
         ]

@@ -4,31 +4,38 @@ import { useLocation, useNavigate } from "react-router";
 import { estimateFromImage, readsPrintedDimensions } from "../../lib/estimate";
 import {
   createProject,
+  getProject,
   markProjectError,
   updateProjectEstimate,
   type ProjectDraft,
 } from "../../lib/projects";
+import { EstimateSaveError, prepareEstimateSave, type PendingEstimateSave } from "../../lib/revision-save";
+import { cleanupPlanFiles, uploadPlan, type PlanAsset } from "../../lib/plan-assets";
+import { PlumbingFixtureReview } from '../components/PlumbingFixtureReview';
+import { ElectricalDeviceReview } from '../components/ElectricalDeviceReview';
+import { proposeElectrical, type ElectricalChoice, type ElectricalConfirmation, type ElectricalProposal } from '../../lib/electrical-proposals';
+import { proposePlumbing, type FixtureConfirmation, type FixtureProposal, type FixtureProposalResult } from '../../lib/plumbing-proposals';
 
 /**
  * `projectId` is present only on a retry after a failed scan - the row
  * already exists and is reused, so retrying does not file a second one.
  */
-type NavState = { draft?: ProjectDraft; projectId?: string; file?: File };
+type NavState = { draft?: ProjectDraft; projectId?: string; expectedRevision?: string | null; file?: File };
 
 /** Reading printed dimensions off the drawing. */
 const OCR_STEPS = [
-  "Initializing analysis engine...",
-  "Reading dimension text...",
-  "Checking dimension chains...",
-  "Deriving wall quantities...",
+  "Preparing your plan...",
+  "Reading your plan...",
+  "Checking plan details...",
+  "Calculating quantities...",
   "Generating cost estimate...",
 ];
 
 /** Counting uploaded symbol references against the drawing. */
 const DETECTION_STEPS = [
-  "Initializing analysis engine...",
-  "Detecting structural elements...",
-  "Mapping material regions...",
+  "Preparing your plan...",
+  "Reading your plan...",
+  "Checking plan details...",
   "Calculating quantities...",
   "Generating cost estimate...",
 ];
@@ -36,13 +43,30 @@ const DETECTION_STEPS = [
 export function ScanningScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { draft, projectId, file } = (location.state ?? {}) as NavState;
+  const { draft, projectId, file, expectedRevision } = (location.state ?? {}) as NavState;
 
   const [progress, setProgress] = useState(0);
   const [step, setStep]         = useState(0);
   const [error, setError]       = useState("");
   // The failure could not be recorded, so the row is still "processing".
   const [unmarked, setUnmarked] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [saveConflict, setSaveConflict] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [hasPreviousResult, setHasPreviousResult] = useState(false);
+  const [uploadFailed, setUploadFailed] = useState(false);
+  const [uploading, setUploading] = useState(true);
+  const [retrying, setRetrying] = useState(false);
+  const [proposal, setProposal] = useState<FixtureProposalResult | null>(null);
+  const [electricalProposal,setElectricalProposal]=useState<ElectricalProposal|null>(null);
+  const electricalWait=useRef<{resolve:(value:ElectricalConfirmation)=>void;reject:(error:Error)=>void}|null>(null);
+  const [readerMessage, setReaderMessage] = useState('');
+  const reviewWait = useRef<{resolve:(value:FixtureConfirmation|null)=>void; reject:(error:Error)=>void} | null>(null);
+  const uploaded = useRef<PlanAsset | null>(null);
+  const uploadId = useRef(crypto.randomUUID());
+  const scanAttempt = useRef<(() => Promise<void>) | null>(null);
+  const pending = useRef<PendingEstimateSave | null>(null);
+  const saveInFlight = useRef(false);
   const ran = useRef(false);
   // Survives a failed scan so "Back to Upload" can hand the existing row
   // back instead of orphaning it.
@@ -56,12 +80,57 @@ export function ScanningScreen() {
 
   useEffect(() => {
     onScreen.current = true;
-    return () => { onScreen.current = false; };
+    return () => { onScreen.current = false; reviewWait.current?.reject(new Error('Fixture review was left before confirmation.')); reviewWait.current=null; electricalWait.current?.reject(new Error('Electrical review was left before confirmation.'));electricalWait.current=null; };
   }, []);
 
   const planType = draft?.planType;
   const readsDimensions = readsPrintedDimensions(planType);
   const steps = readsDimensions ? OCR_STEPS : DETECTION_STEPS;
+
+  function confirmFixtures(fixtures:FixtureProposal[]) {
+    if (!proposal?.receipt) return;
+    reviewWait.current?.resolve({receipt:proposal.receipt,confirmed:true,fixtures});
+    reviewWait.current=null; setProposal(null);
+  }
+
+  function confirmElectrical(choices:ElectricalChoice[]) {
+    if(!electricalProposal)return;
+    electricalWait.current?.resolve({receipt:electricalProposal.receipt,confirmed:true,choices,estimate_scope:'reviewed_device_allowances'});
+    electricalWait.current=null;setElectricalProposal(null);
+  }
+
+  // Leaving the review any other way strands the row at "processing"; rejecting
+  // marks it as an error, whose Back to Upload reuses the same project.
+  function uploadClearerElectrical() {
+    electricalWait.current?.reject(new Error('No devices were found on this drawing. Upload a clearer export of the original plan.'));
+    electricalWait.current=null;setElectricalProposal(null);
+  }
+
+  async function saveComputedEstimate() {
+    if (!pending.current || saveInFlight.current) return;
+    saveInFlight.current = true;
+    if (onScreen.current) setSaving(true);
+    try {
+      await updateProjectEstimate(pending.current);
+      if (onScreen.current) {
+        setProgress(100);
+        navigate("/results", { state: { projectId: pending.current.project_id } });
+      }
+    } finally {
+      saveInFlight.current = false;
+      if (onScreen.current) setSaving(false);
+    }
+  }
+
+  async function retrySave() {
+    try {
+      await saveComputedEstimate();
+    } catch (e) {
+      if (!onScreen.current) return;
+      setError(e instanceof Error ? e.message : "Saving failed. Try again.");
+      setSaveConflict(e instanceof EstimateSaveError && e.status === 409);
+    }
+  }
 
   useEffect(() => {
     if (!draft || !file) {
@@ -97,35 +166,70 @@ export function ScanningScreen() {
     // completed or error, and shows up on Projects. What stops is everything
     // that touches this screen - above all the jump to Results, which used
     // to pull the user off whatever page they had moved on to (audit FLOW-01).
-    (async () => {
+    scanAttempt.current = async () => {
       try {
+        if (onScreen.current) { setError(""); setReaderMessage(''); setUploadFailed(false); setRetrying(true); }
         if (!created.current) {
           created.current = (await createProject(draft)).id;
         }
         const id = created.current;
-
-        const result = await estimateFromImage(file, draft.planType);
-        await updateProjectEstimate(id, result);
-
+        // Capture BEFORE scanning; reading after would conceal a stale tab.
+        const existing = await getProject(id);
+        if (!existing) throw new Error("Project not found. Return to Projects and try again.");
+        if (onScreen.current) setHasPreviousResult(existing.status === "completed");
+        const expected = expectedRevision !== undefined ? expectedRevision : existing.active_revision_id ?? null;
+        if (!uploaded.current) {
+          if (onScreen.current) setUploading(true);
+          await cleanupPlanFiles().catch(() => undefined);
+          uploaded.current = await uploadPlan(id, uploadId.current, file);
+        }
+        if (onScreen.current) setUploading(false);
+        let fixtureReview:FixtureConfirmation|null=null;
+        if (draft.planType === 'Plumbing Plan') {
+          const found=await proposePlumbing(file);
+          if (found) {
+            if (found.source_sha256 !== uploaded.current.source_sha256) throw new Error('The proposal image differs from its saved original. Upload the plan again.');
+            if (found.available) {
+              clearInterval(tick);
+              if (!onScreen.current) throw new Error('Return to the plan to review fixtures before estimating.');
+              fixtureReview=await new Promise<FixtureConfirmation|null>((resolve,reject)=>{
+                reviewWait.current={resolve,reject};setProposal(found);
+              });
+            } else if(onScreen.current) setReaderMessage('Reading your plumbing plan…');
+          }
+        }
+        let electricalReview:ElectricalConfirmation|undefined;
+        if(draft.planType==='Electrical Plan') {
+          const found=await proposeElectrical(file);
+          if(found.source_sha256!==uploaded.current.source_sha256)throw new Error('Electrical proposals differ from the saved original. Upload the plan again.');
+          clearInterval(tick);
+          if(!onScreen.current)throw new Error('Return to the plan to review electrical devices before estimating.');
+          electricalReview=await new Promise<ElectricalConfirmation>((resolve,reject)=>{electricalWait.current={resolve,reject};setElectricalProposal(found);});
+        }
+        const result = await estimateFromImage(file, draft.planType, draft.wallHeightM, fixtureReview ?? undefined, electricalReview);
+        if (result.scan.source_sha256 !== uploaded.current.source_sha256) throw new Error("The scanned image differs from its saved original. Upload the plan again.");
+        pending.current = prepareEstimateSave(id, expected, result, file, crypto.randomUUID(), uploaded.current.id);
         clearInterval(tick);
-        if (!onScreen.current) return;
-        setProgress(100);
-        setStep(steps.length - 1);
-        // Checked again: the user can still leave during this half second.
-        setTimeout(() => {
-          if (onScreen.current) navigate("/results", { state: { projectId: id } });
-        }, 500);
+        await saveComputedEstimate();
       } catch (e) {
         clearInterval(tick);
         const message = e instanceof Error ? e.message : "Scan failed.";
-        if (onScreen.current) setError(message);
+        if (onScreen.current) {
+          setError(message);
+          setUploadFailed(!uploaded.current);
+          setSaveFailed(!!pending.current);
+          setSaveConflict(e instanceof EstimateSaveError && e.status === 409);
+        }
         if (created.current) {
           await markProjectError(created.current, message).catch(() => {
             if (onScreen.current) setUnmarked(true);
           });
         }
+      } finally {
+        if (onScreen.current) setRetrying(false);
       }
-    })();
+    };
+    void scanAttempt.current();
 
     return () => clearInterval(tick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,29 +239,56 @@ export function ScanningScreen() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full py-20 px-8 animate-page-in text-center">
-        <p className="text-[13px] font-mono text-red-400 mb-2">Scan failed</p>
-        <p className="text-[11px] font-mono text-muted-foreground max-w-sm mb-6">{error}</p>
-        {unmarked && (
-          <p className="text-[11px] font-mono text-orange-400 max-w-sm mb-6">
-            This project also couldn't be marked as failed, so it will show as "Scanning…" on the
-            Projects page. Going back to upload and scanning again reuses it; otherwise delete it there.
+      <div className="flex flex-col items-center justify-center min-h-full py-20 px-6 sm:px-8 animate-page-in motion-reduce:animate-none text-center" aria-busy={saving}>
+        <h1 className="text-[20px] font-medium text-foreground mb-3">{uploadFailed ? "Original plan not uploaded" : saveFailed ? "Estimate not saved" : "Scan could not be completed"}</h1>
+        <p role="alert" className="text-[16px] leading-relaxed text-muted-foreground max-w-md mb-6 break-words">{error}</p>
+        {saveFailed && (
+          <p className="text-[16px] leading-relaxed text-muted-foreground max-w-md mb-6">
+            Your computed estimate is kept in this tab. Keep it open to retry saving.
+            Any previously saved estimate remains available.
           </p>
         )}
-        <p className="text-[10px] font-mono text-muted-foreground/60 max-w-sm mb-6">
-          Check that the backend server is running at the address configured in VITE_SCAN_API_URL.
-        </p>
+        {unmarked && (
+          <p className="text-[16px] leading-relaxed text-muted-foreground max-w-md mb-6">
+            The status of this attempt could not be saved either. Keep this tab open to retry,
+            or return to upload to scan again using the same project.
+          </p>
+        )}
+        <div className="flex flex-wrap justify-center gap-3">
+        {uploadFailed && <button type="button" disabled={retrying} onClick={() => void scanAttempt.current?.()}
+          className="min-h-11 px-5 rounded-lg bg-foreground text-background text-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground">
+          Retry uploading
+        </button>}
+        {saveFailed && !saveConflict && (
+          <button type="button" onClick={retrySave} disabled={saving}
+            className="min-h-[44px] px-5 rounded-lg bg-foreground text-background text-[14px] font-medium hover:opacity-90 active:opacity-80 cursor-pointer disabled:opacity-60 disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground/70">
+            {saving ? "Saving estimate…" : "Retry saving"}
+          </button>
+        )}
+        {(uploaded.current || (saveFailed && (hasPreviousResult || saveConflict))) && (
+          <button type="button" disabled={saving}
+            onClick={() => navigate("/results", { state: { projectId: created.current } })}
+            className="min-h-[44px] px-5 rounded-lg border border-border text-[14px] hover:bg-accent active:bg-accent cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground/70">
+            {uploaded.current && !saveFailed && !hasPreviousResult ? "View original plan" : "View saved project"}
+          </button>
+        )}
+        {!saveFailed && !uploadFailed && <button type="button" disabled={retrying} className="min-h-11 px-5 rounded-lg border border-border hover:bg-accent" onClick={()=>void scanAttempt.current?.()}>Retry scan and review</button>}
         <button
+          type="button" disabled={saving}
           onClick={() =>
-            navigate("/upload", { state: { draft, projectId: created.current } })
+            navigate("/upload", { state: { draft, projectId: created.current, expectedRevision } })
           }
-          className="h-9 px-4 rounded-lg border border-border text-[11px] font-mono tracking-[0.14em] uppercase press-scale hover:bg-accent"
+          className="min-h-[44px] px-5 rounded-lg border border-border text-[14px] hover:bg-accent active:bg-accent cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground/70"
         >
           Back to Upload
         </button>
+        </div>
       </div>
     );
   }
+
+  if (proposal && file) return <PlumbingFixtureReview key={proposal.receipt} file={file} proposal={proposal} busy={false} onConfirm={confirmFixtures}/>;
+  if(electricalProposal&&file)return <ElectricalDeviceReview key={electricalProposal.receipt} file={file} proposal={electricalProposal} onConfirm={confirmElectrical} onUploadClearer={uploadClearerElectrical}/>;
 
   return (
     <div className="flex flex-col items-center justify-center h-full py-20 px-8 animate-page-in">
@@ -187,7 +318,7 @@ export function ScanningScreen() {
         </div>
       </div>
 
-      <p className="text-[11px] font-mono text-muted-foreground mb-2 text-center h-4">{steps[step]}</p>
+      <p role="status" className="text-sm text-muted-foreground mb-2 text-center">{readerMessage || (uploading ? "Saving original plan…" : planType==='Plumbing Plan' ? 'Finding plumbing fixtures…' : planType==='Electrical Plan' ? 'Finding electrical devices…' : steps[step])}</p>
       <p className="text-[10px] font-mono text-muted-foreground/50 text-center max-w-xs leading-relaxed">
         Sit back and relax while TRACE performs material cost estimation.
       </p>

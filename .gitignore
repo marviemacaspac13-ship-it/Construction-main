@@ -7,6 +7,35 @@ passwords.md
 # Dependencies
 node_modules/
 backend/.venv/
+.venv-training/
+Ultralytics/
+backend/datasets/plumbing-pilot/prepared/
+backend/datasets/plumbing-pilot/training-runs/
+backend/datasets/plumbing-expanded/prepared/
+backend/datasets/plumbing-expanded/runs/
+# Local derivative drawing images; source redistribution terms remain recorded
+# in the experiment README. Keep scripts, manifests and measurement reports.
+backend/datasets/plumbing-expanded/images/
+backend/datasets/plumbing-expanded/annotation-overlays/
+backend/datasets/plumbing-expanded/prediction-overlays/
+backend/datasets/plumbing-expanded/new-fixture-review.png
+backend/datasets/plumbing-expanded/training.log
+backend/datasets/plumbing-expanded/ocr-baseline.log
+backend/datasets/floorplancad-audit/review-overlays/
+backend/datasets/floorplancad-audit/annotations.recovered.json
+backend/datasets/floorplancad-audit/recovery.log
+backend/datasets/floorplancad-audit/research-prepared/
+backend/datasets/floorplancad-audit/wc-research-prepared/
+backend/datasets/floorplancad-audit/research-runs/
+backend/datasets/floorplancad-audit/stratified-review/
+backend/datasets/floorplancad-audit/transfer-*/prediction-overlays/
+backend/datasets/floorplancad-audit/*-training.log
+backend/datasets/floorplancad-audit/wc-transfer-comparison.png
+backend/datasets/floorplancad-audit/wc-missed-review.png
+# User-supplied CAD corpus kept local; preserve its small audit documentation.
+train-00/*.png
+train-00/*.svg
+train-00/coco_vis/
 
 # Build output
 dist/
@@ -40,3 +69,58 @@ docs/
 # it is kept as the record of what the set was and where its ground truth
 # came from.
 backend/tests/fixtures/plans/Data Set/Floorplan/images/
+
+# Further local complete-view fixture coverage review
+backend/datasets/floorplancad-audit/subtype-review/
+backend/datasets/floorplancad-audit/squat-coverage-review/
+backend/datasets/floorplancad-audit/fixture-coverage-review/
+backend/datasets/floorplancad-audit/fixture-coverage.recovered.json
+backend/datasets/floorplancad-audit/wc-complete-prepared/
+backend/datasets/floorplancad-audit/coverage-fine-prepared/
+backend/datasets/floorplancad-audit/coverage-comparison.png
+backend/datasets/floorplancad-audit/class-specialists-comparison.png
+
+# Local raster-fixture research derivatives
+backend/datasets/raster-fixtures/prepared/
+backend/datasets/raster-fixtures/runs/
+backend/datasets/raster-fixtures/annotation-overlays/
+backend/datasets/raster-fixtures/*/overlays/
+backend/datasets/raster-fixtures/training.log
+backend/datasets/raster-fixtures/comparison.png
+
+# Local source-derived raster review sheets
+tmp/scanned-plumbing-inventory.png
+tmp/floor-fixture-inventory.png
+tmp/raster-fixture-coordinate-review.png
+tmp/powder-native-review.png
+tmp/coordinate-0.png
+tmp/coordinate-1.png
+tmp/coordinate-2.png
+backend/datasets/raster-fixtures/error-review-*.png
+
+# Local joint fixture classification artifacts and source-derived reviews
+backend/datasets/joint-fixtures/runs/
+backend/datasets/joint-fixtures/classifier.npz
+backend/datasets/joint-fixtures/overlays/
+backend/datasets/joint-fixtures/training.log
+backend/datasets/joint-fixtures/prediction.log
+backend/datasets/joint-fixtures/other-review.png
+backend/datasets/joint-fixtures/comparison.png
+tmp/joint-coordinate-*.png
+backend/datasets/wc-proposal-recall/prepared/
+backend/datasets/wc-proposal-recall/runs/
+backend/datasets/wc-proposal-recall/overlays/
+backend/datasets/wc-proposal-recall/*.pt
+backend/datasets/wc-proposal-recall/training.log
+backend/datasets/wc-proposal-recall/annotation-review.png
+backend/datasets/wc-proposal-recall/comparison.png
+
+# Local source-derived tag evidence review images
+backend/datasets/tag-evidence-stage1/overlays/
+backend/datasets/tag-evidence-stage1/comparison.png
+backend/datasets/tag-geometry-stage1/overlays/
+backend/datasets/tag-miss-diagnostic/overlays/
+
+# Scratch space: pip wheels (PyTorch included), trial runs and review crops.
+# Over 400 MB and nothing in it is read by code or tests.
+tmp/

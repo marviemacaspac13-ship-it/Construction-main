@@ -33,6 +33,7 @@ opencv-python-headless==5.0.0.93
 numpy==2.5.3
 rapidocr-onnxruntime==1.2.3     # the OCR engine; its models ship inside the wheel
 onnxruntime==1.29.0             # what rapidocr runs on
+pillow==12.3.0                 # validate format, dimensions and decoding before storing original images
 
 # --- data --------------------------------------------------------------------
 supabase==2.31.0
@@ -41,11 +42,10 @@ pydantic==2.13.5
 
 # --- tests -------------------------------------------------------------------
 pytest==9.1.1
-httpx==0.28.1                   # needed by FastAPI's TestClient
+httpx==0.28.1                   # model-provider HTTP calls and FastAPI's TestClient
 
 # NOT listed, deliberately:
 #   ultralytics  - pulls ~2.5 GB of PyTorch for app/training.py and
 #                  app/vision/detect.py, which nothing imports.
 #   pytesseract  - used only by app/vision/ocr.py, which nothing imports, and
 #                  it needs the separate Tesseract program installed as well.
-#   pillow       - never imported directly; rapidocr brings it in itself.

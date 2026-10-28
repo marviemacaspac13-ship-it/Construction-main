@@ -35,7 +35,7 @@ def _rotate_if_large() -> None:
         LEDGER.replace(LEDGER.with_suffix(".jsonl.1"))
 
 
-def record_estimate(plan_type: str, estimate, extraction=None, plan=None) -> None:
+def record_estimate(plan_type: str, estimate, extraction=None, plan=None, corrections=None) -> None:
     """Append one line describing an estimate and everything behind it."""
     try:
         record = {
@@ -53,6 +53,22 @@ def record_estimate(plan_type: str, estimate, extraction=None, plan=None) -> Non
         if getattr(plan, "fixture_tags", None):
             # Counted but never priced, so they appear in no line item.
             record["fixture_tags"] = dict(plan.fixture_tags)
+        if getattr(plan, "fixture_tag_observations", None):
+            # Preserve image-space OCR evidence for review and later
+            # tag-anchored CV evaluation.
+            record["fixture_tag_observations"] = [
+                observation.model_dump()
+                for observation in plan.fixture_tag_observations
+            ]
+        if corrections is not None:
+            record["corrections"] = corrections
+        if getattr(plan, "fixture_review", None) is not None:
+            record["fixture_review"] = plan.fixture_review.model_dump(mode='json')
+        if getattr(plan, 'electrical_review', None) is not None:
+            record['electrical_review'] = plan.electrical_review.model_dump(mode='json')
+            record['electrical_review_assessments'] = [
+                a.model_dump() for a in plan.electrical_review.assessments()
+            ]
         if extraction is not None:
             record["extraction"] = {
                 "unit": extraction.unit,

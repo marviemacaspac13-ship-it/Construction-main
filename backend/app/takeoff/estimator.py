@@ -40,6 +40,8 @@ class EstimateResponse(BaseModel):
     unpriced: list[BomLine]
     grand_total: float
     assumptions: list[str]
+    estimate_scope: str | None = Field(None, exclude_if=lambda v: v is None)
+    scope_exclusions: list[str] = Field(default_factory=list, exclude_if=lambda v: not v)
 
 
 def _families_in(bom: list[BomLine]) -> set[str]:
@@ -100,6 +102,7 @@ def estimate_from_bom(
     params: EstimatingParams,
     source: str = "manual",
     columns_counted: int | None = None,
+    manual_column_count: int | None = None,
 ) -> EstimateResponse:
     priced: list[PricedLine] = []
     unpriced: list[BomLine] = []
@@ -140,7 +143,7 @@ def estimate_from_bom(
         unpriced=unpriced,
         grand_total=round(grand_total, 2),
         assumptions=(
-            params.assumption_lines(_families_in(bom), columns_counted)
+            params.assumption_lines(_families_in(bom), columns_counted, manual_column_count)
             + _source_assumptions(source)
         ),
     )
@@ -153,10 +156,66 @@ def estimate_plan(
 ) -> EstimateResponse:
     """Full path: PlanSchema -> rules -> BOM -> priced estimate."""
     params = params or EstimatingParams()
+    if plan.electrical_review is not None:
+        # Revalidate Python model_copy/update callers as well as HTTP snapshots.
+        plan = PlanSchema.model_validate(plan.model_dump())
+        if plan.electrical_review.estimate_scope in ('devices_and_boxes', 'reviewed_device_allowances'):
+            review = plan.electrical_review
+            with_allowances = review.estimate_scope == 'reviewed_device_allowances'
+            bom = [BomLine(item_id=k, quantity=v, rule='electrical_review_v1.device',
+                derivation=f'{v} explicitly reviewed physical assemblies; device only', inputs={'assemblies': v})
+                for k, v in review.priced_counts().items()]
+            bom += [BomLine(item_id=k, quantity=v, rule='electrical_review_v1.compatible_box',
+                derivation=f'{v} boxes explicitly selected and confirmed compatible', inputs={'boxes': v})
+                for k, v in review.box_counts().items()]
+            if with_allowances:
+                from app.takeoff.rules.electrical import reviewed_device_allowances
+                bom += reviewed_device_allowances(plan, params)
+            estimate = estimate_from_bom(bom, catalog, plan.plan_type, params)
+            estimate.estimate_scope = review.estimate_scope
+            estimate.scope_exclusions = [
+                'Breakers, panels, circuit design, and wire/conduit allowances for switches and AC outlets are excluded.'
+                if with_allowances else 'Wires, conduit, breakers, panels and circuit design are excluded.']
+            estimate.scope_exclusions += [f'Device {i+1} ({c.observation.device_class}): device excluded — {c.exclusion_reason}'
+                for i, c in enumerate(review.choices) if c.disposition == 'exclude']
+            estimate.scope_exclusions += [f'Device {i+1}: box excluded — {c.box_exclusion_reason}'
+                for i, c in enumerate(review.choices) if c.disposition == 'include' and not c.box_item_id]
+            if with_allowances:
+                estimate.assumptions += [
+                    'Reviewed devices and explicitly compatible boxes, with existing wire/conduit allowances '
+                    'only for supported ceiling and convenience outlets. These are count-based estimating '
+                    'allowances, not measured routes. Switch and AC device counts do not add wiring allowances.',
+                ] + estimate.scope_exclusions
+            else:
+                estimate.assumptions = ['Partial electrical estimate: reviewed devices and explicitly compatible boxes only.'] + estimate.scope_exclusions
+            return estimate
     bom = rules_for(plan.plan_type)(plan, params)
     columns_counted = next(
         (c.count for c in plan.concrete if c.kind == "column" and c.counted), None
     )
-    return estimate_from_bom(
-        bom, catalog, plan.plan_type, params, plan.source, columns_counted
+    estimate = estimate_from_bom(
+        bom, catalog, plan.plan_type, params, plan.source, columns_counted, plan.manual_column_count
     )
+    if plan.fixture_review is not None:
+        tag_assumptions = _source_assumptions('tags')
+        estimate.assumptions = [s for s in estimate.assumptions if s not in tag_assumptions] + ([
+            'All fixture counts originated as printed fixture tags (WC, LAV, U, FD, CO) read by OCR '
+            'and were explicitly reviewed; unlabelled fixtures are counted only where the user added them. '
+            'Later source corrections are recorded separately. '
+            'Fixture counts imply pipe/fitting allowances, not measured pipe routes.'
+        ] if plan.fixture_review.provider == 'tags' else [
+            'WC/LAV counts originated as visual proposals and were explicitly reviewed. '
+            'Other plumbing tags come from OCR; later source corrections are recorded separately. '
+            'Fixture counts imply pipe/fitting allowances, not measured pipe routes.'
+        ])
+    if plan.electrical_review is not None:
+        old = _source_assumptions('detection')
+        excluded = sum(c.disposition == 'exclude' for c in plan.electrical_review.choices)
+        estimate.assumptions = [s for s in estimate.assumptions if s not in old] + [
+            'Electrical source observations were explicitly reviewed. Product choices '
+            'and existing library defaults are retained separately from printed labels; '
+            'later numeric corrections do not rewrite the original reviewed boxes.',
+            f'{excluded} electrical observations were explicitly excluded; their reasons '
+            'remain in the electrical review record. No switch or AC allowance was enabled.',
+        ]
+    return estimate

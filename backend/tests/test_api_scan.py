@@ -6,6 +6,7 @@ like a successful scan of a plan containing no materials.
 """
 
 from unittest.mock import patch
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -15,7 +16,7 @@ from app.main import app
 
 client = TestClient(app)
 
-PNG = b"fake png bytes"
+PNG = (Path(__file__).parent / "fixtures" / "plans" / "01.png").read_bytes()
 
 
 @pytest.fixture(autouse=True)

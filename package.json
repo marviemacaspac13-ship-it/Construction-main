@@ -4,6 +4,10 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "test:plan-assets": "node --test tests/plan-assets-storage.test.mjs",
+    "test:wall-height": "node --test tests/wall-height.test.mjs",
+    "test:revisions": "node --test tests/revision-storage.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "vite build",
     "dev": "vite"
   },
@@ -66,10 +70,14 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "@tailwindcss/vite": "4.1.12",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
     "@types/three": "0.185.1",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
+    "typescript": "5.9.3",
     "vite": "6.3.5"
   },
   "peerDependencies": {

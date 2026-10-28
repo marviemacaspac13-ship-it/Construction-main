@@ -34,7 +34,7 @@ before being turned away — do not re-add them without a new hand count:
 | single receptacle (one line) | 279 hits on `05.png` — a circle and a line is everywhere |
 | triplex receptacle | 80–160 hits on sheets that carry almost nothing |
 | special-purpose (filled, ACU) | 15–18 hits on sheets that are otherwise refused, which would price them |
-| ceiling outlet, plain circle | pushes `05.png` past its hand count of 21 |
+| ceiling outlet, plain circle | exceeded the then-recorded 21-light count on `05.png`; that count was superseded by a 23-light visual recount on 13 Oct, so this variant needs a fresh location-level audit before reconsideration |
 | ceiling outlet, with ticks | `08.png` 17 -> 29 against a true 19 |
 | ceiling outlet, with X | 9 hits on `10.png`, a power layout with no lights at all |
 
@@ -52,7 +52,7 @@ checked against the drawing.
 | Symbol | Result |
 | --- | --- |
 | Pendant Fixture Light | `08.png` 7 → **19 of 19**, every hit checked; `05.png` +1, a plain circle on the dining lighting circuit |
-| Surface Ceiling Light | 9 light symbols on `11.png`, each checked by eye; nothing on any other sheet. `11.png` is **not hand-counted**, so recall there is unknown |
+| Surface Ceiling Light | 9 light symbols on `11.png`, each checked by eye; nothing on any other sheet. A 13 Oct whole-sheet visual count found 9/9 light points, but the plan remains refused under `MIN_DEVICES = 10` and this single-sheet review does not establish generalization. |
 
 The "ceiling outlet, with ticks" rejected in the table above (`08.png` 17 → 29) was the
 same idea before the ring check existed; its extra hits were line crossings, which the
@@ -116,6 +116,14 @@ orientation needs its own reference.
   those labels out, so the crop would be matched and then silently dropped.
 
 ## Adding one
+
+On 11 October 2026, the supplied electrical appendix contributed one tested CLR01
+crop, `6a3a970d9f0c4b3c88b6e5e29c51ddaa.png`. It recovers the lower-left living-area
+light on `05.png` (17 detected of 23 on the 13 Oct recount, previously 16 detected), preserves 19/19 on `08.png` and zero
+false lights on `10.png`, and leaves the other electrical sheets unchanged except
+the identical `02.png` copy. Wider size/orientation variants and the supplied
+plumbing fixture crops were rejected after false-positive checks. Source crops,
+API receipt and evaluation are in [the reference report](../reference_candidates/2026-10-11/README.md).
 
 Either drop a file into `<ITEM_ID>/`, or use the Symbol Library screen, which posts to
 `/api/templates`. Crop tightly around the symbol with no surrounding wires or text.

@@ -97,7 +97,7 @@ def _masonry_and_mortar(plan: PlanSchema, params: EstimatingParams) -> list[BomL
 def _concrete(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
     volume_by_class: dict[str, float] = defaultdict(float)
     for element in plan.concrete:
-        volume_by_class[element.mix_class] += element.volume_m3
+        volume_by_class[element.mix_class] += element.effective_volume_m3
 
     lines: list[BomLine] = []
     for mix_class, volume in sorted(volume_by_class.items()):
@@ -329,7 +329,7 @@ def _footing_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLin
 
 def _slab_steel(el: ConcreteElement, params: EstimatingParams) -> list[BomLine]:
     """Guide: a flat rate per m2 of slab rather than a bar spacing."""
-    area_m2 = el.count * el.width_m * el.length_m
+    area_m2 = el.slab_area_m2 if el.slab_area_m2 is not None else el.count * el.width_m * el.length_m
     return _bar_lines(
         TIE_BAR_ITEM,
         area_m2 * SLAB_MESH_M_PER_M2,

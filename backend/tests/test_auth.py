@@ -20,6 +20,13 @@ pytestmark = pytest.mark.real_auth
 client = TestClient(app)
 
 GUARDED = [
+    ("post", "/api/electrical/proposals"),
+    ("post", "/api/plumbing/proposals"),
+    ("post", "/api/estimate/editor/preview"),
+    ("post", "/api/estimate/editor/revisions"),
+    ("post", "/api/estimate/manual/preview"),
+    ("post", "/api/estimate/manual/revisions"),
+    ("post", "/api/estimate/recalculate"),
     ("post", "/api/scan"),
     ("get", "/api/materials"),
     ("post", "/api/templates"),
@@ -27,6 +34,11 @@ GUARDED = [
     ("delete", "/api/templates/OT01/x.png"),
     ("post", "/api/estimate"),
     ("post", "/api/estimate/image"),
+    ("post", "/api/estimate/revisions"),
+    ("post", "/api/estimate/scan-failure"),
+    ("post", "/api/projects/{project_id}/plans/{upload_id}"),
+    ("get", "/api/projects/{project_id}/plans/{asset_id}/view"),
+    ("post", "/api/plans/cleanup"),
 ]
 
 
@@ -45,10 +57,10 @@ def _supabase_says(user=None, raises=None):
 def test_every_api_route_is_guarded():
     """A route added without the guard shows up here, not in production."""
     api = {
-        (m.lower(), r.path)
-        for r in app.routes
-        if getattr(r, "path", "").startswith("/api/")
-        for m in r.methods
+        (m.lower(), path)
+        for path, methods in app.openapi()["paths"].items()
+        if path.startswith("/api/")
+        for m in methods
     }
     guarded = {(m, p.replace("OT01/x.png", "{item_id}/{filename}")) for m, p in GUARDED}
     assert api == guarded

@@ -1,11 +1,10 @@
 import { authHeaders } from "./supabase";
+import type { EstimateCorrections, EstimateInputSnapshot, ScanMetadata } from "./estimate-input";
+import type { FixtureConfirmation } from './plumbing-proposals';
+import type { ElectricalConfirmation } from './electrical-proposals';
 /**
- * Client for the backend's OCR estimating path (POST /api/estimate/image).
- *
- * Different from scan.ts: that one counts detected symbols, this one reads
- * the plan's printed dimensions and derives quantities from geometry. It
- * returns the estimate together with what the reader saw, so a shaky read
- * is visible instead of implied.
+ * Image estimating client: floor dimensions, electrical symbols, or plumbing
+ * tags, selected by plan type. Includes exact inputs for future corrections.
  */
 
 declare global {
@@ -21,8 +20,8 @@ const API_URL = import.meta.env.VITE_SCAN_API_URL ?? "http://localhost:8000";
 
 /**
  * Plan types whose quantities come from printed dimensions. Everything else
- * is estimated by counting symbols against uploaded references. Both go to
- * the same endpoint; this only decides what the progress captions say.
+ * uses symbols or plumbing tags. All go to the same endpoint; this only
+ * decides what the progress captions say.
  */
 export const OCR_PLAN_TYPES = ["Floor Plan"];
 
@@ -83,29 +82,48 @@ export type ExtractionReport = {
 };
 
 export type Estimate = {
+  estimate_scope?: 'devices_and_boxes' | 'reviewed_device_allowances' | null;
+  scope_exclusions?: string[];
   plan_type: string;
   rules_version: string;
   priced_at: string;
   line_items: PricedLine[];
-  unpriced: { item_id: string; quantity: number; derivation: string }[];
+  unpriced: {
+    item_id: string;
+    quantity: number;
+    rule: string;
+    derivation: string;
+    inputs: Record<string, number>;
+  }[];
   grand_total: number;
   assumptions: string[];
 };
 
 export type ImageEstimate = {
-  /** Null on the detection path - nothing was read, so there is nothing to report. */
+  /** Only floor dimension extraction has this report; tags/symbols return null. */
   extraction: ExtractionReport | null;
   estimate: Estimate;
+  original_input: EstimateInputSnapshot;
+  scan: ScanMetadata;
+  unmatched_detections: {
+    label: string;
+    confidence: number;
+    bbox: number[];
+    dimension_text: string | null;
+  }[];
 };
 
-/** FastAPI puts validation detail in `detail`, which may be a string or an object. */
-function messageFrom(body: unknown, status: number): string {
+/**
+ * FastAPI puts validation detail in `detail`, which may be a string or an object.
+ * A refusal's `warnings` are reader diagnostics (raw counts, chain checks); they
+ * stay in the response body for debugging and are not shown to the user.
+ */
+export function messageFrom(body: unknown, status: number): string {
   if (typeof body === "object" && body !== null && "detail" in body) {
     const detail = (body as { detail: unknown }).detail;
     if (typeof detail === "string") return detail;
     if (typeof detail === "object" && detail !== null && "message" in detail) {
-      const d = detail as { message: string; warnings?: string[] };
-      return [d.message, ...(d.warnings ?? [])].join(" ");
+      return (detail as { message: string }).message;
     }
   }
   return `Estimate failed (${status})`;
@@ -113,11 +131,19 @@ function messageFrom(body: unknown, status: number): string {
 
 export async function estimateFromImage(
   file: File,
-  planType: string
+  planType: string,
+  wallHeightM?: number,
+  fixtureReview?: FixtureConfirmation,
+  electricalReview?: ElectricalConfirmation,
 ): Promise<ImageEstimate> {
   const form = new FormData();
   form.append("file", file);
   form.append("plan_type", planType);
+  if (fixtureReview) form.append('fixture_review', JSON.stringify(fixtureReview));
+  if (electricalReview) form.append('electrical_review', JSON.stringify(electricalReview));
+  if (planType === "Floor Plan" && wallHeightM !== undefined) {
+    form.append("wall_height_m", String(wallHeightM));
+  }
 
   const res = await fetch(`${API_URL}/api/estimate/image`, {
     method: "POST",
@@ -137,4 +163,27 @@ export function confidenceLabel(confidence: number): "High" | "Medium" | "Low" {
   if (confidence >= 0.9) return "High";
   if (confidence >= 0.6) return "Medium";
   return "Low";
+}
+
+export type RecalculatedEstimate = {
+  effective_input: EstimateInputSnapshot;
+  corrections: EstimateCorrections;
+  estimate: Estimate;
+};
+
+/** Stateless preview from the original scan and the complete current overrides. */
+export async function recalculateEstimate(
+  originalInput: EstimateInputSnapshot,
+  corrections: EstimateCorrections,
+): Promise<RecalculatedEstimate> {
+  const res = await fetch(`${API_URL}/api/estimate/recalculate`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify({ original_input: originalInput, corrections }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(messageFrom(body, res.status));
+  }
+  return res.json();
 }

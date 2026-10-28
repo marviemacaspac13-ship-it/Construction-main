@@ -27,6 +27,19 @@ def compute(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
     return lines
 
 
+def reviewed_device_allowances(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
+    """Reuse existing light/outlet rates without extending them to switches/AC.
+
+    Boxes remain separate explicit review decisions. Passing the full reviewed
+    inventory to compute() would duplicate boxes and treat switches/AC as ordinary
+    convenience outlets, so build only the eligible device-count allowance input.
+    """
+    from app.electrical_models import PRICED_REVIEW_SKUS
+    eligible = PlanSchema(plan_type='Electrical Plan', source=plan.source,
+        fixtures=[f for f in plan.fixtures if f.item_id in PRICED_REVIEW_SKUS])
+    return _wire_and_conduit_from_devices(eligible, params)
+
+
 def _devices(plan: PlanSchema) -> list[BomLine]:
     return [
         BomLine(

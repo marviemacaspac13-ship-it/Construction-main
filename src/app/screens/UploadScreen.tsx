@@ -6,52 +6,38 @@ import {
 import { SectionBar, Btn, Mono } from "../components/ui";
 import { useLocation, useNavigate } from "react-router";
 import type { ProjectDraft } from "../../lib/projects";
+import { DEFAULT_WALL_HEIGHT_M } from "../../lib/wall-height";
+import { planFileError } from "../../lib/plan-assets";
+import { uploadTips } from "../../lib/upload-guidance";
 
 /**
  * `projectId` is set only when coming BACK here from a failed scan. The
  * project already exists in that case and must be reused, or a retry files
  * a second row for the same drawing.
  */
-type NavState = { draft?: ProjectDraft; projectId?: string };
+type NavState = { draft?: ProjectDraft; projectId?: string; expectedRevision?: string | null };
 
-// Same trio used on the Details screen, so the icon/color/guidance for a
-// plan type is consistent everywhere it shows up in the wizard.
-const PLAN_META: Record<string, { Icon: typeof LayoutDashboard; color: string; dot: string; tips: string[] }> = {
+// Same trio used on the Details screen, so the icon/color for a plan type is
+// consistent everywhere it shows up in the wizard. Tips: lib/upload-guidance.
+const PLAN_META: Record<string, { Icon: typeof LayoutDashboard; color: string; dot: string }> = {
   "Floor Plan": {
     Icon: LayoutDashboard,
     color: "text-sky-400",
     dot: "bg-sky-400",
-    tips: [
-      "Printed room dimensions should be sharp and legible, not blurry.",
-      "Upload the sheet flat and square-on — avoid skewed or angled photos.",
-      "Higher resolution reads more reliably than a compressed phone photo.",
-    ],
   },
   "Electrical Plan": {
     Icon: Zap,
     color: "text-orange-400",
     dot: "bg-orange-400",
-    tips: [
-      "Devices are matched against your Symbol Library, so add any missing symbols there first.",
-      "Keep the legend visible if the sheet includes one.",
-      "Higher resolution reads more reliably than a compressed phone photo.",
-    ],
   },
   "Plumbing Plan": {
     Icon: Layers,
     color: "text-emerald-400",
     dot: "bg-emerald-400",
-    tips: [
-      "Fixture tags (WC, LAV, FD) need to be readable, not just visible.",
-      "Make sure tag callouts aren't cropped at the sheet edge.",
-      "Higher resolution reads more reliably than a compressed phone photo.",
-    ],
   },
 };
 
 const STEPS = ["Details", "Upload", "Scan"];
-const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
-const MAX_BYTES = 25 * 1024 * 1024; // 25MB
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -62,7 +48,7 @@ function formatBytes(bytes: number) {
 export function UploadScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { draft, projectId } = (location.state ?? {}) as NavState;
+  const { draft, projectId, expectedRevision } = (location.state ?? {}) as NavState;
   const name = draft?.name;
   const description = draft?.description;
   const planType = draft?.planType;
@@ -87,12 +73,10 @@ export function UploadScreen() {
 
   const acceptFile = (f: File) => {
     setFileError("");
-    if (!ACCEPTED_TYPES.includes(f.type)) {
-      setFileError("Unsupported file type — upload a PNG, JPG, or PDF.");
-      return;
-    }
-    if (f.size > MAX_BYTES) {
-      setFileError("File is too large — keep it under 25MB.");
+    const error = planFileError(f);
+    if (error) {
+      setFileError(error);
+      setFile(null);
       return;
     }
     setFile(f);
@@ -112,7 +96,7 @@ export function UploadScreen() {
       return;
     }
     if (!file) return;
-    navigate("/scanning", { state: { draft, projectId, file } });
+    navigate("/scanning", { state: { draft, projectId, file, expectedRevision } });
   };
 
   const goBack = () => {
@@ -146,6 +130,7 @@ export function UploadScreen() {
       )}
 
       {/* Body — fills the rest of the viewport that isn't the top bar / side nav */}
+      {planType==='Electrical Plan'&&<div className="mx-10 mb-5 text-sm space-y-2"><p>Review device locations and types before confirming your estimate.</p><p className="text-muted-foreground">Includes wire and conduit allowances for supported lights and convenience outlets. Switch and AC wiring, breakers, panels and circuit design are excluded.</p></div>}
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 px-10 pb-6 overflow-y-auto">
         {/* Left: dropzone */}
         <div className="border border-border rounded-xl bg-card flex flex-col overflow-hidden">
@@ -203,7 +188,7 @@ export function UploadScreen() {
                 </div>
                 <div className="text-center">
                   <p className="text-[13px] font-mono text-muted-foreground mb-1">Drag and drop your plan here</p>
-                  <p className="text-[10px] font-mono text-muted-foreground/50">PNG, JPG, or PDF — up to 25MB</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">PNG, JPG or WebP — up to 25 MB</p>
                 </div>
                 <Btn variant="secondary" icon={<FolderOpen size={11} />} onClick={(e) => { e?.stopPropagation(); inputRef.current?.click(); }}>
                   Select File
@@ -214,7 +199,7 @@ export function UploadScreen() {
               ref={inputRef}
               type="file"
               className="hidden"
-              accept="image/png,image/jpeg,image/webp,application/pdf"
+              accept="image/png,image/jpeg,image/webp"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) acceptFile(f); e.target.value = ""; }}
             />
           </div>
@@ -243,12 +228,18 @@ export function UploadScreen() {
             {description && (
               <p className="text-[11px] font-mono text-muted-foreground mt-3 leading-relaxed line-clamp-3">{description}</p>
             )}
+            {planType === "Floor Plan" && (
+              <p className="text-sm text-muted-foreground mt-3">
+                Wall height: {(draft?.wallHeightM ?? DEFAULT_WALL_HEIGHT_M).toFixed(2)} m · All walls
+              </p>
+            )}
+            {planType === 'Plumbing Plan' && <p className="text-sm text-muted-foreground mt-3">Check every plumbing fixture location and count before confirming your estimate.</p>}
           </div>
 
           <div className="border border-border rounded-xl bg-card p-6 flex-1 overflow-y-auto">
             <Mono className="block mb-4">For a clean scan</Mono>
             <ul className="space-y-3">
-              {meta.tips.map((tip, i) => (
+              {uploadTips(planType ?? "Floor Plan").map((tip, i) => (
                 <li key={i} className="flex items-start gap-2.5">
                   <span className={`w-1 h-1 rounded-full mt-2 shrink-0 ${meta.dot}`} />
                   <span className="text-[11px] font-mono text-muted-foreground leading-relaxed">{tip}</span>

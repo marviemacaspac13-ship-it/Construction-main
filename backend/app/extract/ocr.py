@@ -44,6 +44,9 @@ class TextBox:
     cy: float
     score: float
     rotated: bool  # True if it came from the rotated pass
+    # Original-image pixel coordinates, retained for offline identity review.
+    # Optional for existing callers that construct center-only observations.
+    quad: tuple[tuple[float, float], ...] | None = None
 
     @property
     def is_number(self) -> bool:
@@ -72,7 +75,11 @@ def _boxes_from(result, height: int, rotated: bool) -> list[TextBox]:
             cx, cy = cy, height - 1 - cx
         cleaned = normalize_text(text)
         if cleaned:
-            boxes.append(TextBox(cleaned, cx, cy, float(score), rotated))
+            points = tuple(
+                (float(y), float(height - 1 - x)) if rotated else (float(x), float(y))
+                for x, y in quad
+            )
+            boxes.append(TextBox(cleaned, cx, cy, float(score), rotated, points))
     return boxes
 
 
@@ -137,7 +144,9 @@ def read_region(
     boxes += _boxes_from(rotated, height, rotated=True)
 
     return [
-        TextBox(b.text, b.cx + x1, b.cy + y1, b.score, b.rotated) for b in boxes
+        TextBox(b.text, b.cx + x1, b.cy + y1, b.score, b.rotated,
+                tuple((x + x1, y + y1) for x, y in b.quad) if b.quad else None)
+        for b in boxes
     ]
 
 

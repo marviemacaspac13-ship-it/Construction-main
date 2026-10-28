@@ -90,7 +90,7 @@ def test_electrical_plan_is_refused_when_the_library_is_empty():
     with patch("app.templates_store.list_templates", return_value={}):
         res = client.post(
             "/api/estimate/image",
-            files={"file": ("plan.png", b"x", "image/png")},
+            files={"file": ("plan.png", (PLANS / "01.png").read_bytes(), "image/png")},
             data={"plan_type": "Electrical Plan"},
         )
     assert res.status_code == 422
@@ -109,7 +109,7 @@ def test_the_library_guard_is_per_trade():
     with patch("app.main._templates_for", return_value={}):
         res = client.post(
             "/api/estimate/image",
-            files={"file": ("plan.png", b"x", "image/png")},
+            files={"file": ("plan.png", (PLANS / "01.png").read_bytes(), "image/png")},
             data={"plan_type": "Electrical Plan"},
         )
     assert res.status_code == 422
@@ -232,7 +232,7 @@ def test_electrical_plan_is_refused_when_no_references_exist():
     with patch("app.templates_store.list_templates", return_value={}):
         res = client.post(
             "/api/estimate/image",
-            files={"file": ("plan.png", b"x", "image/png")},
+            files={"file": ("plan.png", (PLANS / "01.png").read_bytes(), "image/png")},
             data={"plan_type": "Electrical Plan"},
         )
     assert res.status_code == 422
@@ -254,7 +254,7 @@ def test_electrical_plan_is_priced_from_detections_when_references_exist():
          patch("app.main.match_templates", return_value=detections):
         res = client.post(
             "/api/estimate/image",
-            files={"file": ("plan.png", b"x", "image/png")},
+            files={"file": ("plan.png", (PLANS / "01.png").read_bytes(), "image/png")},
             data={"plan_type": "Electrical Plan"},
         )
 

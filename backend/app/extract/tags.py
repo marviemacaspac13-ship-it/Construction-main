@@ -23,6 +23,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 import numpy as np
+import cv2
 
 from app.extract.ocr import TextBox, merge_boxes, read_array, read_region
 
@@ -40,7 +41,35 @@ _EDGE_NOISE = ".,*+-:;_ "
 
 
 def normalise_tag(text: str) -> str:
-    return text.upper().strip(_EDGE_NOISE)
+    text = text.upper().strip(_EDGE_NOISE)
+    # Repair only a complete cleanout token. Never collapse whitespace in
+    # arbitrary labels (e.g. W C, F CO or a multi-fixture text region).
+    if re.fullmatch(r"C[ \t]*\.?[ \t]*O", text):
+        return re.sub(r"[ \t]+", "", text)
+    return text
+
+
+def _same_cleanout_location(first: TextBox, second: TextBox) -> bool:
+    """Require overlapping text polygons, not a fixed pixel-distance window.
+
+    Spacing repair can make two reads of the same glyph newly countable.
+    Keep center-only legacy observations rather than guessing their extent.
+    """
+    polygons = []
+    for box in (first, second):
+        if box.quad is None:
+            return False
+        points = np.asarray(box.quad, dtype=np.float32)
+        if points.shape != (4, 2) or not np.isfinite(points).all():
+            return False
+        hull = cv2.convexHull(points)
+        if cv2.contourArea(hull) <= 0:
+            return False
+        polygons.append(hull)
+    a, b = polygons
+    intersection, _ = cv2.intersectConvexConvex(a, b)
+    union = cv2.contourArea(a) + cv2.contourArea(b) - intersection
+    return union > 0 and intersection / union >= 0.5
 
 
 @dataclass(frozen=True)
@@ -165,6 +194,15 @@ def count_tags(
                     break
                 hits[tag].append(box)
                 break  # a tag belongs to one kind
+
+    # Scoped to cleanouts: the broader WC/FD deduplication experiment remains
+    # offline. Original text and polygons survive on the retained observation.
+    if "cleanout" in hits:
+        kept = []
+        for box in sorted(hits["cleanout"], key=lambda b: -b.score):
+            if not any(_same_cleanout_location(box, other) for other in kept):
+                kept.append(box)
+        hits["cleanout"] = sorted(kept, key=lambda b: (b.cy, b.cx))
 
     return {
         tag: TagCount(tag=tag, count=len(found), boxes=tuple(found))

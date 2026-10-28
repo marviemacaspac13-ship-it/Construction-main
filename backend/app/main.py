@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import traceback
+import hashlib
+import asyncio
 
 import cv2
 import numpy as np
@@ -17,9 +19,16 @@ from app.schemas import ScanResponse
 from app.materials import load_catalog
 from app import audit, templates_store
 from app.auth import current_user
+from app.revisions import router as revisions_router
+from app.plan_assets import MAX_BYTES as MAX_PLAN_BYTES, inspect_image, router as plan_assets_router
+from app.corrections import router as corrections_router
+from app.editor import router as editor_router
+from app import plumbing_vision
+from app import electrical_review as electrical_boundary
+from app import electrical_vision
+from app.electrical_models import ElectricalObservation
 from app.extract.tags import count_tags, read_tiled, tally
-from app.takeoff.constants import FIXTURE_PLUMBING, FIXTURE_TAG_PATTERNS
-from app.takeoff.schema import PlanSchema
+from app.takeoff.constants import FIXTURE_PLUMBING, FIXTURE_TAG_PATTERNS, MIN_FIXTURES
 
 from pydantic import BaseModel
 
@@ -29,7 +38,9 @@ from app.extract.to_plan import to_plan_schema
 from app.takeoff.from_detections import plan_from_detections
 from app.takeoff.estimator import EstimateResponse, estimate_plan
 from app.takeoff.params import EstimatingParams
-from app.takeoff.schema import PlanSchema
+from app.takeoff.schema import FixtureTagObservation, PlanSchema
+from app.takeoff.contracts import EstimateInputSnapshot, ScanMetadata, snapshot_catalog
+from app.takeoff.units import UNIT_SPECS
 
 VALID_PLAN_TYPES = ("Floor Plan", "Electrical Plan", "Plumbing Plan")
 
@@ -69,8 +80,6 @@ TAG_PLAN_TYPES = ("Plumbing Plan",)
 # trap it avoids is worth not rediscovering - see app/vision/relabel.py.
 READ_SYMBOL_LABELS = False
 
-MIN_FIXTURES = 3
-
 # The fewest symbols a real electrical sheet can plausibly carry. The one
 # plan with a hand count has 35; the sheets that match nothing real return
 # two to five stray hits at the current threshold, and an estimate built on
@@ -85,6 +94,11 @@ class EstimateRequest(BaseModel):
     params: EstimatingParams | None = None
 
 app = FastAPI(title="TRACE Detection API")
+app.include_router(revisions_router)
+app.include_router(plan_assets_router)
+app.include_router(corrections_router)
+app.include_router(editor_router)
+app.include_router(plumbing_vision.router)
 
 # Every route but /health needs a signed-in user - see app/auth.py.
 SIGNED_IN = [Depends(current_user)]
@@ -129,7 +143,8 @@ async def scan_plan(file: UploadFile = File(...)):
             "then scan again.",
         )
 
-    raw_bytes = await file.read()
+    raw_bytes = await file.read(MAX_PLAN_BYTES + 1)
+    inspect_image(raw_bytes, file.filename or '', file.content_type)
     image = preprocess_image(raw_bytes)
     detections = match_templates(image)
     return price_takeoff(detections)
@@ -182,12 +197,59 @@ def estimate(request: EstimateRequest):
     return estimate_plan(request.plan, load_catalog(), request.params)
 
 
+@app.post('/api/electrical/proposals', dependencies=SIGNED_IN)
+async def electrical_proposals(file: UploadFile = File(...), owner: str = Depends(current_user)):
+    """Gemini proposals first; local detection is automatic, with the same review scope."""
+    raw = await file.read(MAX_PLAN_BYTES + 1)
+    metadata = inspect_image(raw, file.filename or '', file.content_type or '')
+    proposed = await electrical_vision.find_proposals(raw,metadata,owner)
+    if proposed['available']:
+        return proposed
+    return await asyncio.to_thread(_local_electrical_proposals,raw,metadata,owner,
+        proposed['attempts'],proposed['message'])
+
+
+def _local_electrical_proposals(raw, metadata, owner, attempts, message):
+    """Keep installed local detection as fallback; never merge two inventories."""
+    image = preprocess_image(raw)
+    h, w = image.shape[:2]
+    observations = []
+    for detection in match_templates(image):
+        family = ('light_point' if detection.label.startswith('CLR') else
+                  'convenience_outlet' if detection.label.startswith('OT') else 'unknown')
+        if family == 'unknown':
+            continue
+        x1, y1, x2, y2 = detection.bbox
+        identifier = f'proposal-{len(observations)+1}'
+        observations.append(ElectricalObservation(id=identifier, assembly_id=identifier,
+            box_2d=[y1/h*1000, x1/w*1000, min(y2/h*1000,1000), min(x2/w*1000,1000)],
+            device_class=family, socket_configuration='duplex' if family == 'convenience_outlet' else None,
+            uncertainty='Template family proposal; verify location and product against the drawing.'))
+        if len(observations) > 500:
+            raise HTTPException(422, 'More than 500 proposals. Upload a smaller plan section.')
+    limitations=['Local symbol proposals can miss devices and include false matches. Check the entire drawing.',
+        'Local fallback does not automatically recognize switches. Add missed switches and classify them; unsupported types require explicit exclusion.',
+        'Device and box pricing remains partial. Circuit materials are excluded.']
+    try:
+        receipt = electrical_boundary.issue_review(raw, owner, observations, provider='template', model='local-symbol-library',
+            attempts=attempts,limitations=limitations)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return dict(source_sha256=metadata['source_sha256'], image_width=w, image_height=h,
+        available=True,provider='template',model='local-symbol-library',attempts=attempts,
+        proposed=observations, receipt=receipt,message=message,limitations=limitations)
+
+
 @app.post("/api/estimate/image", response_model=ImageEstimateResponse, dependencies=SIGNED_IN)
 async def estimate_image(
     file: UploadFile = File(...),
     plan_type: str = Form("Floor Plan"),
+    wall_height_m: float | None = Form(None, gt=0, le=10),
+    fixture_review: str | None = Form(None, max_length=800_000),
+    electrical_review: str | None = Form(None, max_length=2_000_000),
+    owner: str = Depends(current_user),
 ):
-    """Read a dimensioned plan image and price it, with no human input.
+    """Read and price a plan; floor plans accept one project-wide wall height.
 
     Returns the estimate alongside what the reader saw and how much of it
     checks out, so a low-confidence result is visible rather than implied.
@@ -199,24 +261,61 @@ async def estimate_image(
             f"{', '.join(VALID_PLAN_TYPES)}.",
         )
 
+    if wall_height_m is not None and plan_type not in OCR_PLAN_TYPES:
+        raise HTTPException(422, "Wall height applies only to Floor Plan estimates.")
+    if fixture_review is not None and plan_type not in TAG_PLAN_TYPES:
+        raise HTTPException(422, "Fixture review applies only to plumbing plans.")
+    if electrical_review is not None and plan_type != 'Electrical Plan':
+        raise HTTPException(422, 'Electrical review applies only to electrical plans.')
+
+    # Resolve once, before recognition. The same value prices walls and is
+    # captured for replay; structural member dimensions remain independent.
+    params = EstimatingParams(**(
+        {"default_wall_height_m": wall_height_m} if wall_height_m is not None else {}
+    ))
+
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
 
-    raw_bytes = await file.read()
+    raw_bytes = await file.read(MAX_PLAN_BYTES + 1)
+    inspect_image(raw_bytes, file.filename or '', file.content_type)
 
+    unmatched = []
     if plan_type in OCR_PLAN_TYPES:
         plan, report = _read_plan(raw_bytes, plan_type)
     elif plan_type in TAG_PLAN_TYPES:
-        plan, report = _read_plumbing(raw_bytes, plan_type)
+        review = plumbing_vision.validate_review(fixture_review, raw_bytes, owner) if fixture_review else None
+        plan, report = _read_plumbing(raw_bytes, plan_type, review) if review else _read_plumbing(raw_bytes, plan_type)
+    elif electrical_review is not None:
+        try:
+            from app.electrical_models import ElectricalReviewSubmission
+            submission = ElectricalReviewSubmission.model_validate_json(electrical_review)
+            if submission.estimate_scope not in ('devices_and_boxes', 'reviewed_device_allowances'):
+                raise ValueError('This workflow requires explicit reviewed electrical estimate scope.')
+            review = electrical_boundary.confirm_review(submission, raw_bytes, owner)
+            plan, report = electrical_boundary.reviewed_plan(review), None
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     else:
-        plan, report = _detect_plan(raw_bytes, plan_type)
+        plan, report, unmatched = _detect_plan(raw_bytes, plan_type)
 
-    estimate = estimate_plan(plan, load_catalog())
+    catalog = load_catalog()
+    estimate = estimate_plan(plan, catalog, params)
     # Assumptions are deliberately not surfaced in the UI, so the only place
     # they survive is the ledger. See app/audit.py.
     audit.record_estimate(plan_type, estimate, report, plan)
 
-    return ImageEstimateResponse(extraction=report, estimate=estimate)
+    return ImageEstimateResponse(
+        extraction=report, estimate=estimate,
+        original_input=EstimateInputSnapshot(
+            plan=plan, params=params,
+            prices=snapshot_catalog(catalog, estimate.priced_at),
+        ),
+        scan=ScanMetadata(
+            source_sha256=hashlib.sha256(raw_bytes).hexdigest(), method=plan.source,
+        ),
+        unmatched_detections=unmatched,
+    )
 
 
 def _read_plan(raw_bytes: bytes, plan_type: str):
@@ -246,6 +345,20 @@ def _read_plan(raw_bytes: bytes, plan_type: str):
             )
         raise HTTPException(422, {"message": message, "warnings": extraction.warnings()})
 
+    # No margin chain read means the outline rests on numbers nothing checks.
+    # On the shrunk sample plans every such read priced the building at 1.6x
+    # to 2.7x its full-size total. See tests/test_floor_needs_a_chain.py.
+    if not extraction.chain_checks:
+        raise HTTPException(422, {
+            "message": (
+                "Could not read the plan's dimension lines clearly enough to check "
+                "the building size, so it was not priced. Upload the original export "
+                "of the drawing; enlarging a small screenshot does not restore "
+                "missing detail."
+            ),
+            "warnings": extraction.warnings(),
+        })
+
     return to_plan_schema(extraction, plan_type), report_from_extraction(extraction)
 
 
@@ -273,7 +386,7 @@ def _templates_for(plan_type: str) -> dict[str, list[str]]:
     }
 
 
-def _read_plumbing(raw_bytes: bytes, plan_type: str):
+def _read_plumbing(raw_bytes: bytes, plan_type: str, review=None):
     """Plumbing: count printed fixture tags, then derive what serves them.
 
     Not the detection path. The countable things on a sanitary plan - WC,
@@ -290,11 +403,27 @@ def _read_plumbing(raw_bytes: bytes, plan_type: str):
     if image is None:
         raise HTTPException(400, "Could not decode image - corrupt or unsupported format.")
 
-    counts = tally(count_tags(read_tiled(image), FIXTURE_TAG_PATTERNS, image.shape))
+    # A confirmed tag review already replaces every tag class, so reading the
+    # sheet again would cost the whole tiled OCR pass for nothing.
+    tags_reviewed = review is not None and review.provider == "tags"
+    tag_counts = {} if tags_reviewed else count_tags(read_tiled(image), FIXTURE_TAG_PATTERNS, image.shape)
+    counts = tally(tag_counts)
+    observations = [
+        FixtureTagObservation(
+            tag=tag,
+            x_px=box.cx,
+            y_px=box.cy,
+            score=box.score,
+        )
+        for tag, tag_count in tag_counts.items()
+        for box in tag_count.boxes
+    ]
 
     # A cleanout implies no materials, so it does not count towards the
     # floor below - a sheet where only cleanouts were read has produced
     # nothing to price.
+    if review is not None:
+        counts, observations = plumbing_vision.apply_review(counts, observations, review)
     fixtures = sum(n for tag, n in counts.items() if FIXTURE_PLUMBING.get(tag))
 
     # Nothing read at all. The same trap the empty-library guard closes.
@@ -317,7 +446,7 @@ def _read_plumbing(raw_bytes: bytes, plan_type: str):
     # electrical one existed: two sample sheets were pricing a single stray
     # tag at P1,744 apiece, which is the "empty result is never a real zero"
     # failure wearing a small non-zero number instead.
-    if fixtures < MIN_FIXTURES:
+    if fixtures < MIN_FIXTURES and (review is None or not review.accepted):
         raise HTTPException(
             422,
             {
@@ -337,7 +466,11 @@ def _read_plumbing(raw_bytes: bytes, plan_type: str):
         )
 
     plan = PlanSchema(
-        plan_type=plan_type, source="tags", fixture_tags=dict(counts)
+        plan_type=plan_type,
+        source="tags",
+        fixture_tags=dict(counts),
+        fixture_tag_observations=observations,
+        fixture_review=review,
     )
     # Nothing was measured, so there is no extraction report to give.
     return plan, None
@@ -437,4 +570,4 @@ def _detect_plan(raw_bytes: bytes, plan_type: str):
         )
 
     # Detection supplies counts only; there is nothing "read" to report on.
-    return plan, None
+    return plan, None, [d for d in detections if d.label not in UNIT_SPECS]

@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 from app.extract.to_plan import PlanExtraction
 from app.takeoff.estimator import EstimateResponse
+from app.takeoff.contracts import EstimateInputSnapshot, ScanMetadata
+from app.schemas import Detection
 
 
 class ChainReport(BaseModel):
@@ -54,12 +56,17 @@ class ExtractionReport(BaseModel):
 
 
 class ImageEstimateResponse(BaseModel):
-    """An estimate plus, when the plan was read rather than detected, a
-    report on how well it was read. Symbol detection produces no such
-    report - nothing was read - so `extraction` is absent there."""
+    """Additive scan response, retaining exact inputs for later corrections.
+
+    `extraction` is a floor-plan report; tags and detections still return
+    null there. Unpriced BOM lines remain in `estimate.unpriced`.
+    """
 
     extraction: ExtractionReport | None
     estimate: EstimateResponse
+    original_input: EstimateInputSnapshot
+    scan: ScanMetadata
+    unmatched_detections: list[Detection] = Field(default_factory=list)
 
 
 def report_from_extraction(extraction: PlanExtraction) -> ExtractionReport:
