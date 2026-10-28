@@ -121,8 +121,10 @@ def test_tiling_recovers_tags_the_whole_page_pass_misses():
 def test_deduplication_is_what_makes_it_a_count():
     """Overlapping tiles see the same tag several times.
 
-    Without merge_boxes deduplicating on text AND position, `LAV` comes
-    back about 39 times against roughly 11 real ones.
+    With no deduplication at all, `LAV` comes back about 39 times against
+    roughly 11 real ones. merge_boxes removes most of that; since 28 Oct 2026
+    count_tags also merges same-spot reads, so it lands on the same count
+    even when handed the raw tile reads.
     """
     image = cv2.imread(str(PLANS / "07.png"))
     merged = tally(count_tags(read_tiled(image), PLUMBING_TAGS))
@@ -136,8 +138,9 @@ def test_deduplication_is_what_makes_it_a_count():
                 image, col * (w // 5), row * (h // 5),
                 (col + 1) * (w // 5), (row + 1) * (h // 5),
             )
-    undeduped = tally(count_tags(raw, PLUMBING_TAGS))
-    assert undeduped["lavatory"] > merged["lavatory"]
+    no_dedupe = sum(normalise_tag(b.text) == "LAV" for b in raw)
+    assert no_dedupe > merged["lavatory"]
+    assert tally(count_tags(raw, PLUMBING_TAGS))["lavatory"] == merged["lavatory"]
 
 
 # --- a legend is not a set of fixtures ----------------------------------
@@ -176,6 +179,49 @@ def test_a_duplicate_read_of_the_same_glyph_is_not_an_expansion():
     """
     boxes = [box("WC", 168, 505), box("wC'", 168, 505)]
     assert tally(count_tags(boxes, PLUMBING_TAGS, SHAPE))["water_closet"] >= 1
+
+
+def outlined(text, cx, cy, score=.8):
+    """A read with its text outline, which is what lets two reads be compared."""
+    return TextBox(text, cx, cy, score, False,
+                   ((cx - 10, cy - 5), (cx + 10, cy - 5), (cx + 10, cy + 5), (cx - 10, cy + 5)))
+
+
+def test_one_label_read_twice_counts_once_for_every_tag():
+    """'WC'/'wC' and 'FD'/'+ FD' at one spot are one label read by two passes.
+
+    merge_boxes keeps both because the strings differ. Only cleanouts used to
+    be merged, so `07.png` priced 8 WC and 13 FD where its labels say 7 and 11.
+    """
+    boxes = [outlined("WC", 100, 100, .9), outlined("wC", 101, 100),
+             outlined("FD", 300, 100), outlined("+ FD", 302, 101), outlined("FD", 600, 100)]
+    counts = count_tags(boxes, PLUMBING_TAGS)
+    assert tally(counts) == {"water_closet": 1, "floor_drain": 2}
+    assert counts["water_closet"].boxes[0].text == "WC"  # the stronger read is kept
+
+
+def test_different_tags_at_one_spot_are_both_kept():
+    boxes = [outlined("WC", 100, 100), outlined("FD", 100, 100)]
+    assert tally(count_tags(boxes, PLUMBING_TAGS)) == {"water_closet": 1, "floor_drain": 1}
+
+
+@pytest.mark.ocr
+@pytest.mark.skipif(not (PLANS / "07.png").exists(), reason="plan images not present")
+def test_the_reader_and_the_label_review_count_the_same():
+    """Unreviewed pricing (Gemini answers, so U/FD/CO come from here) and the
+    label review must not disagree about the same sheet."""
+    from collections import Counter
+
+    from app import plumbing_vision
+    from app.takeoff.constants import FIXTURE_TAG_PATTERNS
+
+    raw = (PLANS / "07.png").read_bytes()
+    image = cv2.imread(str(PLANS / "07.png"))
+    read = tally(count_tags(read_tiled(image), FIXTURE_TAG_PATTERNS, image.shape))
+    meta = {"source_sha256": "0" * 64, "pixel_width": image.shape[1], "pixel_height": image.shape[0]}
+    proposed = plumbing_vision.tag_proposals(raw, meta, "owner", [], "")
+    by_tag = {cls: tag for tag, cls in plumbing_vision.TAG_CLASSES.items()}
+    assert read == Counter(by_tag[f["fixture_class"]] for f in proposed["fixtures"])
 
 
 def test_an_expansion_far_across_the_sheet_is_not_a_legend_row():

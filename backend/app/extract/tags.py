@@ -49,11 +49,12 @@ def normalise_tag(text: str) -> str:
     return text
 
 
-def _same_cleanout_location(first: TextBox, second: TextBox) -> bool:
+def _same_location(first: TextBox, second: TextBox) -> bool:
     """Require overlapping text polygons, not a fixed pixel-distance window.
 
-    Spacing repair can make two reads of the same glyph newly countable.
-    Keep center-only legacy observations rather than guessing their extent.
+    The two OCR passes can read one label twice ('WC'/'wC', 'FD'/'+ FD'), and
+    spacing repair can make two reads of one cleanout newly countable. Keep
+    center-only legacy observations rather than guessing their extent.
     """
     polygons = []
     for box in (first, second):
@@ -195,14 +196,15 @@ def count_tags(
                 hits[tag].append(box)
                 break  # a tag belongs to one kind
 
-    # Scoped to cleanouts: the broader WC/FD deduplication experiment remains
-    # offline. Original text and polygons survive on the retained observation.
-    if "cleanout" in hits:
+    # One label read twice is one fixture: keep the stronger read. Only reads of
+    # the same tag merge; a WC and an FD at one spot are left for review. Until
+    # 28 Oct 2026 only cleanouts merged, and 07.png priced 8 WC / 13 FD for 7 / 11.
+    for tag, found in hits.items():
         kept = []
-        for box in sorted(hits["cleanout"], key=lambda b: -b.score):
-            if not any(_same_cleanout_location(box, other) for other in kept):
+        for box in sorted(found, key=lambda b: -b.score):
+            if not any(_same_location(box, other) for other in kept):
                 kept.append(box)
-        hits["cleanout"] = sorted(kept, key=lambda b: (b.cy, b.cx))
+        hits[tag] = sorted(kept, key=lambda b: (b.cy, b.cx))
 
     return {
         tag: TagCount(tag=tag, count=len(found), boxes=tuple(found))

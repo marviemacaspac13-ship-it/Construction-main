@@ -127,7 +127,7 @@ def health():
 
 
 @app.post("/api/scan", response_model=ScanResponse, dependencies=SIGNED_IN)
-async def scan_plan(file: UploadFile = File(...)):
+def scan_plan(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
 
@@ -143,7 +143,7 @@ async def scan_plan(file: UploadFile = File(...)):
             "then scan again.",
         )
 
-    raw_bytes = await file.read(MAX_PLAN_BYTES + 1)
+    raw_bytes = file.file.read(MAX_PLAN_BYTES + 1)
     inspect_image(raw_bytes, file.filename or '', file.content_type)
     image = preprocess_image(raw_bytes)
     detections = match_templates(image)
@@ -154,14 +154,14 @@ def list_materials():
     return list(load_catalog().values())
 
 @app.post("/api/templates", dependencies=SIGNED_IN)
-async def upload_template(item_id: str = Form(...), file: UploadFile = File(...)):
+def upload_template(item_id: str = Form(...), file: UploadFile = File(...)):
     catalog = load_catalog()
     if item_id not in catalog:
         raise HTTPException(400, f"'{item_id}' is not a known catalog item_id.")
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
 
-    raw_bytes = await file.read()
+    raw_bytes = file.file.read()
     try:
         filename = templates_store.save_template(
             item_id, raw_bytes, file.filename or "template.png"
@@ -241,7 +241,7 @@ def _local_electrical_proposals(raw, metadata, owner, attempts, message):
 
 
 @app.post("/api/estimate/image", response_model=ImageEstimateResponse, dependencies=SIGNED_IN)
-async def estimate_image(
+def estimate_image(
     file: UploadFile = File(...),
     plan_type: str = Form("Floor Plan"),
     wall_height_m: float | None = Form(None, gt=0, le=10),
@@ -277,7 +277,7 @@ async def estimate_image(
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
 
-    raw_bytes = await file.read(MAX_PLAN_BYTES + 1)
+    raw_bytes = file.file.read(MAX_PLAN_BYTES + 1)
     inspect_image(raw_bytes, file.filename or '', file.content_type)
 
     unmatched = []

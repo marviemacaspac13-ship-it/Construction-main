@@ -266,15 +266,10 @@ def tag_proposals(raw, metadata, owner, attempts, message):
     height, width = image.shape[:2]
     fixtures = []
     for tag, found in count_tags(read_tiled(image), FIXTURE_TAG_PATTERNS, image.shape).items():
-        # The two OCR passes can read one label twice ('WC' and 'wC', 'FD' and
-        # '+ FD') at the same spot. Review refuses overlapping boxes, so keep
-        # the stronger read; a different type at the same spot stays for review.
-        for box in sorted(found.boxes, key=lambda b: -b.score):
-            proposal = FixtureProposal(id=f'tag-{len(fixtures)+1}', fixture_class=TAG_CLASSES[tag],
-                box_2d=_tag_box(box, width, height), uncertainty=f'Printed tag read as "{box.text}".')
-            if any(f.fixture_class == proposal.fixture_class and overlap(f, proposal) > .5 for f in fixtures):
-                continue
-            fixtures.append(proposal)
+        # count_tags has already merged one label read twice.
+        for box in found.boxes:
+            fixtures.append(FixtureProposal(id=f'tag-{len(fixtures)+1}', fixture_class=TAG_CLASSES[tag],
+                box_2d=_tag_box(box, width, height), uncertainty=f'Printed tag read as "{box.text}".'))
             if len(fixtures) > 500:
                 raise HTTPException(422, 'More than 500 fixture tags. Upload a smaller plan section.')
     # Same floor as the original reader, so a stray tag is refused, not offered.
