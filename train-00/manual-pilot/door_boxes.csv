@@ -1,0 +1,5 @@
+image,class,x_min,y_min,x_max,y_max,review_status,notes
+0005-0002.png,door,18,426,110,558,exploratory_manual,Visible door swing; approximate box from raw tile
+0005-0002.png,door,292,405,393,507,exploratory_manual,Visible door swing; approximate box from raw tile
+0005-0002.png,door,486,404,587,507,exploratory_manual,Visible door swing; approximate box from raw tile
+0010-0046.png,door,556,703,675,873,exploratory_manual,Visible paired door swings; approximate box from raw tile

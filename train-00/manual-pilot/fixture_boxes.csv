@@ -1,0 +1,4 @@
+image,class,x_min,y_min,x_max,y_max,review_status,notes
+0486-0013.png,toilet,108,394,221,455,exploratory_manual,Shape checked against raw raster; approximate box
+0486-0013.png,sink,106,486,178,553,exploratory_manual,Shape checked against raw raster; approximate box
+0486-0013.png,sink,350,223,438,282,exploratory_manual,Double-basin sink treated as one fixture; approximate box
