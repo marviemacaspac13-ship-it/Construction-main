@@ -30,7 +30,7 @@ api = 'http://127.0.0.1:8000'
 checks, disposable, stored = [], [], []
 b_id = None
 report = {'live_storage': 'in progress'}
-report_path = ROOT / 'supabase/PLAN_ASSET_LIVE_ACCEPTANCE_2026-10-11.json'
+report_path = ROOT / 'docs/supabase/PLAN_ASSET_LIVE_ACCEPTANCE_2026-10-11.json'
 
 
 def check(label, condition):

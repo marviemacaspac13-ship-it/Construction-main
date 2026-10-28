@@ -18,8 +18,8 @@ eligible switch/AC devices and confirmed boxes can be priced; switch/AC wiring,
 breakers, panels and circuit design remain excluded. The latest grouped UI has
 offline browser and signed-in save/reload/Projects reopen/CSV/price edit/reset evidence.
 The live fixture used local fallback and a labelled synthetic switch, not new
-model recognition. See [implementation](backend/ELECTRICAL_GROUPED_REVIEW_2026-10-27.md)
-and [live acceptance](backend/ELECTRICAL_GROUPED_LIVE_ACCEPTANCE_2026-10-27.md).
+model recognition. See [implementation](docs/backend/ELECTRICAL_GROUPED_REVIEW_2026-10-27.md)
+and [live acceptance](docs/backend/ELECTRICAL_GROUPED_LIVE_ACCEPTANCE_2026-10-27.md).
 
 ## Plumbing fixture review
 
@@ -32,16 +32,16 @@ managed by the backend.
 
 Saved Results show the accepted boxes; direct box editing requires a new scan.
 Numeric quantity corrections remain available separately. See the
-[review instructions and configuration](backend/PLUMBING_VISION_SETUP.md#where-to-find-the-fixture-review)
-and the [live acceptance record](backend/PLUMBING_VISION_LIVE_ACCEPTANCE_2026-10-22.md).
+[review instructions and configuration](docs/backend/PLUMBING_VISION_SETUP.md#where-to-find-the-fixture-review)
+and the [live acceptance record](docs/backend/PLUMBING_VISION_LIVE_ACCEPTANCE_2026-10-22.md).
 
 ## Local setup
 
 Install frontend dependencies with `npm i`, then run `npm run dev`. Create `.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Start the Python API from `backend/` with `.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000`; it needs `backend/.env` and the database migrations described in the backend guide. Python 3.13 is required for the pinned backend dependencies.
 
-The [27 October status matrix](docs/revisions/STATUS_2026-10-27.md) separates completed R27/R30–R32 scope from open recognition, workflow acceptance and product decisions. Use the [remaining-work plan](docs/superpowers/plans/2026-10-27-remaining-revisions.md) for next tasks, [accuracy/limitations summary](docs/revisions/ACCURACY_AND_LIMITATIONS_2026-10-27.md) for submission claims, and [todo.md](todo.md) for detailed history. The [client checklist](docs/revisions/REVISION_CHECKLIST.md) preserves the original request wording.
+The [27 October status matrix](docs/revisions/STATUS_2026-10-27.md) separates completed R27/R30–R32 scope from open recognition, workflow acceptance and product decisions. Use the [remaining-work plan](docs/superpowers/plans/2026-10-27-remaining-revisions.md) for next tasks, [accuracy/limitations summary](docs/revisions/ACCURACY_AND_LIMITATIONS_2026-10-27.md) for submission claims, and [todo.md](docs/revisions/todo.md) for detailed history. The [client checklist](docs/revisions/REVISION_CHECKLIST.md) preserves the original request wording.
 
-The [14 October handoff](HANDOFF_2026-10-14.md) is historical; the linked current status supersedes its next-work list.
+The [14 October handoff](docs/handoffs/HANDOFF_2026-10-14.md) is historical; the linked current status supersedes its next-work list.
 
 ## Verification
 
@@ -49,9 +49,9 @@ The [14 October handoff](HANDOFF_2026-10-14.md) is historical; the linked curren
 ownership-aware alignment pass improved one exposed lighting replay from 13 to
 14 matched locations out of 19; the other three saved outputs were unchanged.
 58 focused tests and 785 non-OCR backend tests passed, with 53 OCR tests excluded.
-No provider calls or pricing changes. See [evidence and limitations](backend/ELECTRICAL_ALIGNMENT_FOLLOWUP_2026-10-28.md).
+No provider calls or pricing changes. See [evidence and limitations](docs/backend/ELECTRICAL_ALIGNMENT_FOLLOWUP_2026-10-28.md).
 
-A separate [28 October classification diagnostic](backend/ELECTRICAL_CLASSIFICATION_TRIAL_2026-10-28.md)
+A separate [28 October classification diagnostic](docs/backend/ELECTRICAL_CLASSIFICATION_TRIAL_2026-10-28.md)
 used one approved crop-board request. It recovered two target outlet families but
 misclassified a known light. The crop method was not adopted; production types,
 counts and prices remain unchanged.
@@ -85,4 +85,4 @@ Grouped-review live persistence, CSV and price edit/reset passed with external
 recognition disabled for the fixture. This is not the entire OCR suite or a
 new-family recognition-accuracy certification.
 
-The bounded checks on 25 October 2026 passed 661 non-OCR backend tests, 36 frontend/database tests, twelve electrical image regressions and six representative real-image API outcomes; TypeScript checking and the production build also passed. The full OCR suite was not run. See [results and limits](backend/SUBMISSION_ACCEPTANCE_2026-10-25.md). Subsequent [live correction/manual acceptance](backend/EDITOR_LIVE_ACCEPTANCE_2026-10-25.md) passed 29 API/database assertions and browser save/reopen/reset checks. Four backend dependency deprecation warnings and the large-bundle build advisory remain. These checks do not certify recognition accuracy on new drawing families.
+The bounded checks on 25 October 2026 passed 661 non-OCR backend tests, 36 frontend/database tests, twelve electrical image regressions and six representative real-image API outcomes; TypeScript checking and the production build also passed. The full OCR suite was not run. See [results and limits](docs/backend/SUBMISSION_ACCEPTANCE_2026-10-25.md). Subsequent [live correction/manual acceptance](docs/backend/EDITOR_LIVE_ACCEPTANCE_2026-10-25.md) passed 29 API/database assertions and browser save/reopen/reset checks. Four backend dependency deprecation warnings and the large-bundle build advisory remain. These checks do not certify recognition accuracy on new drawing families.

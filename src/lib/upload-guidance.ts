@@ -3,7 +3,7 @@
  * the new-project modal), so a user gets the same advice whichever way they come.
  *
  * Advice, not a threshold: downsampling measurably loses reads, but no minimum
- * pixel count holds for every plan type (supabase/PLAN_ASSET_DEPLOYMENT.md).
+ * pixel count holds for every plan type (docs/supabase/PLAN_ASSET_DEPLOYMENT.md).
  */
 export const ORIGINAL_EXPORT_TIP =
   "Upload the original export. Enlarging a small screenshot does not restore missing detail.";

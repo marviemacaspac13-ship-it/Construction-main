@@ -62,8 +62,8 @@ leave them false until their migrations and deployment checks are complete. See
 **Database setup.** Run the files in `../supabase/migrations/` in order, in the Supabase SQL
 editor. `002_project_owner.sql` makes each project private to the account that created it;
 later migrations add immutable revisions, private originals and source corrections. See the
-[revision](../supabase/REVISION_DEPLOYMENT.md), [plan-asset](../supabase/PLAN_ASSET_DEPLOYMENT.md)
-and [editor](../supabase/EDITOR_DEPLOYMENT.md) deployment notes before enabling those features.
+[revision](../docs/supabase/REVISION_DEPLOYMENT.md), [plan-asset](../docs/supabase/PLAN_ASSET_DEPLOYMENT.md)
+and [editor](../docs/supabase/EDITOR_DEPLOYMENT.md) deployment notes before enabling those features.
 
 ## 3. Run
 

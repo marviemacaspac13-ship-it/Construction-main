@@ -33,7 +33,7 @@ def pre(rid):return {'expected_active_revision_id':rid,'idempotency_key':str(uui
 try:
     lines=(ROOT/'passwords.md').read_text().splitlines(); idx=next(i for i,l in enumerate(lines) if re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',l.strip()))
     a=login(lines[idx].strip(),next(l.strip() for l in lines[idx+1:] if l.strip()))
-    previous_report=ROOT/'supabase/EDITOR_LIVE_ACCEPTANCE_2026-10-11.json'
+    previous_report=ROOT/'docs/supabase/EDITOR_LIVE_ACCEPTANCE_2026-10-11.json'
     prior=json.loads(previous_report.read_text()) if '--reuse-review-project' in sys.argv else {}
     pid=prior.get('review_project_id') or project('ACCEPTANCE R30 R31 EDITOR 2026-10-11','Floor Plan'); report['review_project_id']=pid
     prior_revision=rows('projects',id='eq.'+pid)[0]['active_revision_id']
@@ -87,4 +87,4 @@ finally:
         r=httpx.delete(base+'/auth/v1/admin/users/'+bid,headers=admin,timeout=30)
         check('Temporary second account removed',r.status_code in (200,204))
     report.update(checks_passed=len(checks),checks=checks)
-    (ROOT/'supabase/EDITOR_LIVE_ACCEPTANCE_2026-10-11.json').write_text(json.dumps(report,indent=2)+'\n')
+    (ROOT/'docs/supabase/EDITOR_LIVE_ACCEPTANCE_2026-10-11.json').write_text(json.dumps(report,indent=2)+'\n')

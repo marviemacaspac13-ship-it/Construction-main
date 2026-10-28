@@ -164,4 +164,4 @@ finally:
 report["test_user_cleanup"] = "complete"
 report["checks_passed"] = len(checks)
 report["checks"] = checks
-(ROOT / "supabase/LIVE_ACCEPTANCE_2026-10-10.json").write_text(json.dumps(report, indent=2) + "\n")
+(ROOT / "docs/supabase/LIVE_ACCEPTANCE_2026-10-10.json").write_text(json.dumps(report, indent=2) + "\n")
