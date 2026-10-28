@@ -189,10 +189,19 @@ def test_the_derivation_says_it_was_not_measured():
 
 # --- plumbing -----------------------------------------------------------
 
-def test_the_main_run_scales_with_the_fixture_count():
-    lines = [li for li in plumbing_compute(FIXTURES, DEFAULTS) if li.rule == "plumbing.main_run"]
-    # 33 fixtures that imply materials; cleanouts do not.
-    assert all(li.inputs["route_length_m"] == pytest.approx(33 * 1.5) for li in lines)
+def test_the_main_run_scales_with_the_fixtures_each_service_serves():
+    lines = {li.item_id: li for li in plumbing_compute(FIXTURES, DEFAULTS) if li.rule == "plumbing.main_run"}
+    # The drain main serves all 33 fixtures that imply materials; cleanouts do not count.
+    assert lines["PDP03"].inputs["route_length_m"] == pytest.approx(33 * 1.5)
+    # The supply main serves only the 20 that take water. A floor drain is fed by
+    # nothing, so its 13 used to add 19.5 m of supply pipe that serves no one.
+    assert lines["PCSP01"].inputs["route_length_m"] == pytest.approx(20 * 1.5)
+
+
+def test_floor_drains_alone_pull_no_supply_main():
+    drains = PlanSchema(plan_type="Plumbing Plan", source="tags", fixture_tags={"floor_drain": 4})
+    lines = [li for li in plumbing_compute(drains, DEFAULTS) if li.rule == "plumbing.main_run"]
+    assert {li.item_id for li in lines} == {"PDP01"}
 
 
 def test_a_cleanout_pulls_no_main_run():

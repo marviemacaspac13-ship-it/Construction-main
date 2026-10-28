@@ -172,13 +172,20 @@ def _main_run(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
             params,
         )
     ]
-    if params.supply_branch_m_per_fixture > 0:
+    # Only fixtures that take water hang off the supply main; a floor drain
+    # is fed by nothing (see FIXTURE_PLUMBING).
+    supplied = sum(
+        count
+        for tag, count in plan.fixture_tags.items()
+        if count > 0 and "supply" in FIXTURE_PLUMBING.get(tag, {})
+    )
+    if supplied > 0 and params.supply_branch_m_per_fixture > 0:
         lines.append(
             _pipe_line(
                 "PCSP01",
-                length_m,
+                supplied * params.main_run_m_per_fixture,
                 "plumbing.main_run",
-                f"{served} fixtures x {params.main_run_m_per_fixture:g} m of shared supply each",
+                f"{supplied} supplied fixtures x {params.main_run_m_per_fixture:g} m of shared supply each",
                 params,
             )
         )
