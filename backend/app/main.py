@@ -164,7 +164,10 @@ def upload_template(item_id: str = Form(...), file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file (PNG/JPG).")
 
-    raw_bytes = file.file.read()
+    # Checked like a plan: a non-image saved here joins everyone's library and
+    # is then silently skipped at match time.
+    raw_bytes = file.file.read(MAX_PLAN_BYTES + 1)
+    inspect_image(raw_bytes, file.filename or "template.png", file.content_type)
     try:
         filename = templates_store.save_template(
             item_id, raw_bytes, file.filename or "template.png"
