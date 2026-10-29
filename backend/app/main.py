@@ -113,10 +113,13 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    # The traceback goes to the server log; the browser gets no internals,
+    # which once included catalog keys and the Supabase project address.
     traceback.print_exc()
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc)},
+        content={"detail": "Something went wrong on the server. Try again; if it keeps "
+                           "happening, the details are in the backend log."},
         headers={"Access-Control-Allow-Origin": "http://localhost:5173"},
     )
 
