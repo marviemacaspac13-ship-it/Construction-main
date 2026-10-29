@@ -53,7 +53,9 @@ SCHEMA = {'type':'object', 'additionalProperties':False,
         'limitations':{'type':'array','maxItems':28,'items':{'type':'string','maxLength':1000}}}}
 FREE_TIER_MODELS = frozenset({'gemini-3.8-flash', 'gemini-3.6-flash',
     'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'})
-DEFAULT_MODELS = 'gemini-3.5-flash-lite,gemini-2.5-flash'
+# 3.6 Flash matched 12/21 reviewed marks against Flash-Lite's 2/21 (29 Oct 2026,
+# backend/datasets/electrical-whole-sheet-3.6-flash-2026-10-29); 3.8 Flash timed out.
+DEFAULT_MODELS = 'gemini-3.6-flash,gemini-3.5-flash-lite'
 MODEL_TIMEOUT_SECONDS = 60
 TOTAL_TIMEOUT_SECONDS = 125
 _SLOTS = asyncio.Semaphore(2)

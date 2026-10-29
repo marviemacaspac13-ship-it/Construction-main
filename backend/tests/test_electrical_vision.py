@@ -181,7 +181,8 @@ def test_paid_models_and_duplicates_are_not_added_to_fallback_order(monkeypatch)
 
 def test_default_uses_verified_replacement_and_ignores_rejected_legacy_model(monkeypatch):
     monkeypatch.delenv('ELECTRICAL_GEMINI_MODELS',raising=False)
-    assert vision.configured_models()==['gemini-3.5-flash-lite','gemini-2.5-flash']
+    # 3.6 Flash first since the 29 Oct 2026 trial (12/21 reviewed marks vs 2/21).
+    assert vision.configured_models()==['gemini-3.6-flash','gemini-3.5-flash-lite']
     monkeypatch.setenv('ELECTRICAL_GEMINI_MODELS','gemini-2.5-flash-lite,gemini-3.5-flash-lite,gemini-flash-latest')
     assert vision.configured_models()==['gemini-3.5-flash-lite']
 
