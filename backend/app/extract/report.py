@@ -67,6 +67,9 @@ class ImageEstimateResponse(BaseModel):
     original_input: EstimateInputSnapshot
     scan: ScanMetadata
     unmatched_detections: list[Detection] = Field(default_factory=list)
+    # HMAC over original_input for this user and image; the save checks it, so
+    # the stored "original read" is what the scanner produced.
+    input_signature: str | None = None
 
 
 def report_from_extraction(extraction: PlanExtraction) -> ExtractionReport:

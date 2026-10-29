@@ -19,7 +19,7 @@ from app.schemas import ScanResponse
 from app.materials import load_catalog
 from app import audit, templates_store
 from app.auth import current_user
-from app.revisions import router as revisions_router
+from app.revisions import router as revisions_router, sign_original_input
 from app.plan_assets import MAX_BYTES as MAX_PLAN_BYTES, inspect_image, router as plan_assets_router
 from app.corrections import router as corrections_router
 from app.editor import router as editor_router
@@ -308,16 +308,15 @@ def estimate_image(
     # they survive is the ledger. See app/audit.py.
     audit.record_estimate(plan_type, estimate, report, plan)
 
+    original_input = EstimateInputSnapshot(
+        plan=plan, params=params, prices=snapshot_catalog(catalog, estimate.priced_at),
+    )
+    source_sha256 = hashlib.sha256(raw_bytes).hexdigest()
     return ImageEstimateResponse(
-        extraction=report, estimate=estimate,
-        original_input=EstimateInputSnapshot(
-            plan=plan, params=params,
-            prices=snapshot_catalog(catalog, estimate.priced_at),
-        ),
-        scan=ScanMetadata(
-            source_sha256=hashlib.sha256(raw_bytes).hexdigest(), method=plan.source,
-        ),
+        extraction=report, estimate=estimate, original_input=original_input,
+        scan=ScanMetadata(source_sha256=source_sha256, method=plan.source),
         unmatched_detections=unmatched,
+        input_signature=sign_original_input(original_input, source_sha256, owner),
     )
 
 

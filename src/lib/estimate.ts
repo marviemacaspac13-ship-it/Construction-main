@@ -105,6 +105,8 @@ export type ImageEstimate = {
   estimate: Estimate;
   original_input: EstimateInputSnapshot;
   scan: ScanMetadata;
+  /** Server signature over original_input; returned unchanged when saving. */
+  input_signature?: string | null;
   unmatched_detections: {
     label: string;
     confidence: number;

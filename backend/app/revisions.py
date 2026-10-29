@@ -1,5 +1,9 @@
 """Validated revision persistence. No recognition or new correction semantics here."""
+import hashlib
+import hmac
+import json
 import os
+import secrets
 from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
@@ -54,6 +58,20 @@ class SaveScanRequest(ContractModel):
         return self
 
 
+# Set ESTIMATE_INPUT_SECRET for multiple workers; an in-process key works for one
+# worker, at the cost that a restart between scan and save asks for a rescan.
+_LOCAL_INPUT_SECRET = secrets.token_bytes(32)
+
+
+def sign_original_input(snapshot, source_sha256: str, owner: str) -> str:
+    """Bind a scan's original input to the user and image it was read for."""
+    key = os.environ["ESTIMATE_INPUT_SECRET"].encode() if os.getenv("ESTIMATE_INPUT_SECRET") else _LOCAL_INPUT_SECRET
+    body = json.dumps({"owner": owner, "source_sha256": source_sha256,
+                       "original_input": snapshot.model_dump(mode="json")},
+                      sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hmac.new(key, b"trace-original-input-v1" + body.encode(), hashlib.sha256).hexdigest()
+
+
 class ScanFailureRequest(ContractModel):
     project_id: UUID
     message: str = Field(min_length=1, max_length=2000)
@@ -91,6 +109,9 @@ def save_scan(request: SaveScanRequest, owner: str = Depends(current_user)):
     # snapshot must not silently replay with the current implementation.
     if any(row.purchase_unit != UNIT_SPECS.get(row.item_id) for row in snapshot.prices.items):
         raise HTTPException(409, "Purchase units changed. Rescan before saving.")
+    expected = sign_original_input(snapshot, request.result.scan.source_sha256, owner)
+    if not hmac.compare_digest(request.result.input_signature or "", expected):
+        raise HTTPException(422, "This scan result could not be verified as unchanged. Rescan before saving.")
     computed = estimate_plan(snapshot.plan, snapshot.prices.to_catalog(), snapshot.params)
     submitted = request.result.estimate
     if computed.model_dump(exclude={"priced_at"}) != submitted.model_dump(exclude={"priced_at"}):

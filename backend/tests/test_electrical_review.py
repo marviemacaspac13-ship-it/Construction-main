@@ -1,4 +1,5 @@
 """Offline review boundaries: semantics, signed provenance and snapshot replay."""
+from app.revisions import sign_original_input
 from copy import deepcopy
 import hashlib
 import io
@@ -200,7 +201,8 @@ def save_payload(raw,catalog,review):
     return dict(project_id=str(uuid4()),precondition=dict(expected_active_revision_id=None,idempotency_key=str(uuid4())),
         asset=dict(source_sha256=sha,original_filename='test.png',media_type='image/png',byte_size=len(raw)),
         result=dict(original_input=snapshot.model_dump(mode='json'),scan=dict(source_sha256=sha,method='detection'),
-            estimate=estimate.model_dump(),extraction=None,unmatched_detections=[]))
+            estimate=estimate.model_dump(),extraction=None,unmatched_detections=[],
+            input_signature=sign_original_input(snapshot,sha,'test-user')))
 
 
 def test_mock_revision_save_preserves_review_and_rejects_mismatches(raw,catalog,monkeypatch):

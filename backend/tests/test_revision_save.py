@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from postgrest.exceptions import APIError
 
 from app.main import app
-from app.takeoff.contracts import snapshot_catalog
+from app.revisions import sign_original_input
+from app.takeoff.contracts import EstimateInputSnapshot, snapshot_catalog
 from app.takeoff.estimator import estimate_plan
 from app.takeoff.params import EstimatingParams
 from app.takeoff.schema import FixtureCount, PlanSchema
@@ -26,14 +27,15 @@ def payload(catalog, monkeypatch):
                       fixtures=[FixtureCount(item_id="OT01", count=12)])
     params = EstimatingParams()
     estimate = estimate_plan(plan, catalog, params)
+    original_input = EstimateInputSnapshot(plan=plan, params=params,
+                                           prices=snapshot_catalog(catalog, estimate.priced_at))
     return {
         "project_id": PROJECT,
         "precondition": {"expected_active_revision_id": None, "idempotency_key": REVISION},
         "asset": {"source_sha256": "a" * 64, "original_filename": "plan.png", "media_type": "image/png", "byte_size": 1234},
         "result": {
-            "original_input": {"schema_version": 1, "rules_version": estimate.rules_version,
-                "plan": plan.model_dump(), "params": params.model_dump(),
-                "prices": snapshot_catalog(catalog, estimate.priced_at).model_dump(mode="json")},
+            "original_input": original_input.model_dump(mode="json"),
+            "input_signature": sign_original_input(original_input, "a" * 64, "test-user"),
             "scan": {"source_sha256": "a" * 64, "pipeline_version": "image-v1", "method": "detection"},
             "estimate": estimate.model_dump(), "extraction": None,
             "unmatched_detections": [{"label": "UNKNOWN", "confidence": .8, "bbox": [1, 2, 3, 4], "dimension_text": None}],
