@@ -14,10 +14,7 @@ to a scan, which takes seconds, and it means a revoked or signed-out session
 stops working here at the same moment it stops working in the browser.
 """
 
-from functools import lru_cache
-
 from fastapi import Header, HTTPException
-from supabase import Client
 from supabase_auth.errors import AuthApiError, AuthInvalidJwtError, AuthSessionMissingError
 
 from app.materials import _client
@@ -25,11 +22,6 @@ from app.materials import _client
 # The token was checked and is not a valid session: signed out, expired,
 # forged, or from another project. A 401 tells the browser to sign in again.
 _REJECTED = (AuthApiError, AuthInvalidJwtError, AuthSessionMissingError)
-
-
-@lru_cache(maxsize=1)
-def _auth_client() -> Client:
-    return _client()
 
 
 def current_user(authorization: str | None = Header(default=None)) -> str:
@@ -43,7 +35,7 @@ def current_user(authorization: str | None = Header(default=None)) -> str:
         raise HTTPException(401, "Sign in first - this request carried no session.")
 
     try:
-        response = _auth_client().auth.get_user(token.strip())
+        response = _client().auth.get_user(token.strip())
     except _REJECTED:
         raise HTTPException(401, "Your session has expired or is not valid. Sign in again.")
     except Exception:

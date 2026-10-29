@@ -3,6 +3,8 @@ from functools import lru_cache
 from supabase import create_client, Client
 
 
+# One client for every call: each new one opened its own HTTPS connection.
+@lru_cache(maxsize=1)
 def _client() -> Client:
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")

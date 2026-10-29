@@ -51,7 +51,7 @@ def _supabase_says(user=None, raises=None):
         def get_user(token):
             return SimpleNamespace(user=user)
     auth.get_user = get_user
-    return patch("app.auth._auth_client", return_value=SimpleNamespace(auth=auth))
+    return patch("app.auth._client", return_value=SimpleNamespace(auth=auth))
 
 
 def test_every_api_route_is_guarded():
@@ -73,7 +73,7 @@ def test_no_session_is_refused(method, path):
 
 @pytest.mark.parametrize("header", ["", "Bearer", "Bearer   ", "Basic abc", "token-without-scheme"])
 def test_a_malformed_header_is_refused_without_asking_supabase(header):
-    with patch("app.auth._auth_client", side_effect=AssertionError("must not be called")):
+    with patch("app.auth._client", side_effect=AssertionError("must not be called")):
         assert client.get("/api/templates", headers={"Authorization": header}).status_code == 401
 
 
