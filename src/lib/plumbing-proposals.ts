@@ -1,17 +1,23 @@
 import { authHeaders } from './supabase';
 
-export type FixtureClass = 'WC' | 'LAV' | 'U' | 'FD' | 'CO';
+export type FixtureClass = 'WC' | 'LAV' | 'U' | 'FD' | 'CO' | 'KS' | 'SH' | 'BT' | 'WM' | 'HB' | 'DF';
 export type FixtureProvider = 'gemini' | 'openrouter' | 'tags';
 export const FIXTURE_NAMES: Record<FixtureClass, [string, string]> = {
   WC: ['toilet', 'toilets'], LAV: ['lavatory', 'lavatories'], U: ['urinal', 'urinals'],
   FD: ['floor drain', 'floor drains'], CO: ['cleanout', 'cleanouts'],
+  KS: ['kitchen sink', 'kitchen sinks'], SH: ['shower', 'showers'], BT: ['bathtub', 'bathtubs'],
+  WM: ['washing machine', 'washing machines'], HB: ['hose bib', 'hose bibs'],
+  DF: ['drinking fountain', 'drinking fountains'],
 };
 export const FIXTURE_COLORS: Record<FixtureClass, string> = {
   WC: '#ef4444', LAV: '#3b82f6', U: '#a855f7', FD: '#16a34a', CO: '#d97706',
+  KS: '#0891b2', SH: '#db2777', BT: '#4f46e5', WM: '#65a30d', HB: '#0d9488', DF: '#ca8a04',
 };
-/** A model proposes toilets and lavatories only; a printed-tag review covers every tag priced. */
+/** A model boxes drawn fixtures; small marks (FD, CO, HB, DF) come from printed labels only. */
 export function reviewClasses(provider: FixtureProvider | undefined): FixtureClass[] {
-  return provider === 'tags' ? ['WC', 'LAV', 'U', 'FD', 'CO'] : ['WC', 'LAV'];
+  return provider === 'tags'
+    ? ['WC', 'LAV', 'U', 'FD', 'CO', 'KS', 'SH', 'BT', 'WM', 'HB', 'DF']
+    : ['WC', 'LAV', 'U', 'KS', 'SH', 'BT', 'WM'];
 }
 export function fixtureSummary(fixtures: FixtureProposal[], classes: FixtureClass[]): string {
   const parts = classes.map(cls => {

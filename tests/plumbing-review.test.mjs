@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const source=(await readFile(new URL('../src/lib/plumbing-proposals.ts',import.meta.url),'utf8')).replace("import { authHeaders } from './supabase';",'const authHeaders=async()=>({});');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
-const {fixtureReviewError,placeFixtureBox,moveFixtureBox,resizeFixtureBox,reviewClasses,fixtureSummary}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const {fixtureReviewError,placeFixtureBox,moveFixtureBox,resizeFixtureBox,reviewClasses,fixtureSummary,FIXTURE_NAMES,FIXTURE_COLORS}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const fixture=(id,box,cls='WC')=>({id,fixture_class:cls,box_2d:box,uncertainty:null});
 
 test('review rejects same and cross-class overlaps without losing adjacent fixtures',()=>{
@@ -30,9 +30,9 @@ test('review rejects invalid coordinates and repeated IDs before confirmation',(
   assert.match(fixtureReviewError([fixture('one',[10,10,40,40]),fixture('one',[50,50,60,60])]),/unique/);
   assert.equal(fixtureReviewError([]),''); // Explicit review may exclude both classes; server guards empty priced plans.
 });
-test('a tag review covers every priced tag; a model review only toilets and lavatories',()=>{
-  assert.deepEqual(reviewClasses('tags'),['WC','LAV','U','FD','CO']);
-  assert.deepEqual(reviewClasses('gemini'),['WC','LAV']);
+test('a tag review covers every priced tag; a model review only the drawn fixtures',()=>{
+  assert.deepEqual(reviewClasses('tags'),['WC','LAV','U','FD','CO','KS','SH','BT','WM','HB','DF']);
+  assert.deepEqual(reviewClasses('gemini'),['WC','LAV','U','KS','SH','BT','WM']);
   const drain=fixture('one',[10,10,40,40],'FD');
   assert.equal(fixtureReviewError([drain],reviewClasses('tags')),'');
   assert.notEqual(fixtureReviewError([drain],reviewClasses('gemini')),'');
@@ -41,4 +41,11 @@ test('the confirmation names every reviewed class, including zeros',()=>{
   const fixtures=[fixture('a',[0,0,5,5]),fixture('b',[10,10,15,15],'FD'),fixture('c',[20,20,25,25],'FD')];
   assert.equal(fixtureSummary(fixtures,['WC','LAV','FD']),'1 toilet, 0 lavatories and 2 floor drains');
   assert.equal(fixtureSummary(fixtures.slice(0,1),['WC','LAV']),'1 toilet and 0 lavatories');
+});
+test('every fixture type has a name and a colour for the review screen',()=>{
+  for(const cls of reviewClasses('tags')){
+    assert.equal(FIXTURE_NAMES[cls].length,2,cls);
+    assert.match(FIXTURE_COLORS[cls],/^#[0-9a-f]{6}$/,cls);
+  }
+  assert.equal(new Set(reviewClasses('tags').map(c=>FIXTURE_COLORS[c])).size,reviewClasses('tags').length);
 });

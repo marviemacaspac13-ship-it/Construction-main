@@ -273,6 +273,13 @@ class EstimatingParams(BaseModel):
                 f"A further {self.main_run_m_per_fixture:g} m per fixture is allowed for the "
                 f"shared run back to the main, which no plan dimensions either.",
             ),
+            (
+                "plumbing",
+                "Kitchen sinks, showers, bathtubs, washing machines and drinking fountains each "
+                "take a 2-inch drain with a wye and a 1/2-inch supply with a tee; a hose bib takes "
+                "supply only. These pairings are an estimating assumption chosen by the owner on "
+                "30 Oct 2026, not values from a plumbing standard.",
+            ),
         ]
         if self.include_frame:
             w, d = COLUMN_SECTION_M

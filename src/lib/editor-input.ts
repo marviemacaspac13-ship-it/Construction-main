@@ -2,7 +2,9 @@ import type { EstimateCorrections, EstimateInputSnapshot, SourceQuantityOverride
 
 export type EditField = { key: string; label: string; original?: number; integer?: boolean; min?: number; max?: number; provenance: string };
 export const electricalLabels: Record<string,string> = { OT01:'1-gang outlet · OT01', OT02:'2-gang outlet · OT02', OT03:'3-gang outlet · OT03', CLR01:'Ceiling outlet · CLR01', CLR02:'Ceiling outlet · CLR02', CLR03:'Ceiling outlet · CLR03' };
-export const plumbingLabels: Record<string,string> = { water_closet:'Water closets', lavatory:'Lavatories', urinal:'Urinals', floor_drain:'Floor drains', cleanout:'Cleanouts (count only)' };
+export const plumbingLabels: Record<string,string> = { water_closet:'Water closets', lavatory:'Lavatories', urinal:'Urinals', floor_drain:'Floor drains', cleanout:'Cleanouts (count only)',
+  kitchen_sink:'Kitchen sinks', shower:'Showers', bathtub:'Bathtubs', washing_machine:'Washing machines',
+  hose_bib:'Hose bibs', drinking_fountain:'Drinking fountains' };
 
 export function sourceFields(input: EstimateInputSnapshot): EditField[] {
   const p=input.plan;

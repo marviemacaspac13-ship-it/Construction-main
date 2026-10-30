@@ -175,6 +175,30 @@ FIXTURE_PLUMBING: dict[str, dict[str, str]] = {
     # no pipe of its own and has no catalog row, so it is counted and
     # nothing more.
     "cleanout": {},
+    # Added 30 Oct 2026, the owner's estimating choice rather than a plumbing
+    # standard (none exists for this project): a 2" drain and wye plus a 1/2"
+    # supply and tee for each fixture below, and supply only for a hose bib.
+    "kitchen_sink": {
+        "drain": "PDP01", "drain_fitting": "PVYO01",
+        "supply": "PCSP01", "supply_fitting": "PVTB01",
+    },
+    "shower": {
+        "drain": "PDP01", "drain_fitting": "PVYO01",
+        "supply": "PCSP01", "supply_fitting": "PVTB01",
+    },
+    "bathtub": {
+        "drain": "PDP01", "drain_fitting": "PVYO01",
+        "supply": "PCSP01", "supply_fitting": "PVTB01",
+    },
+    "washing_machine": {
+        "drain": "PDP01", "drain_fitting": "PVYO01",
+        "supply": "PCSP01", "supply_fitting": "PVTB01",
+    },
+    "drinking_fountain": {
+        "drain": "PDP01", "drain_fitting": "PVYO01",
+        "supply": "PCSP01", "supply_fitting": "PVTB01",
+    },
+    "hose_bib": {"supply": "PCSP01", "supply_fitting": "PVTB01"},
 }
 
 # The fewest material-bearing fixtures a whole sanitary layout can carry.
@@ -183,12 +207,19 @@ FIXTURE_PLUMBING: dict[str, dict[str, str]] = {
 MIN_FIXTURES = 3
 
 # Tags as they are printed beside the fixture, for app/extract/tags.py.
+# Washing machines have no label here: on Philippine water-line layouts WM
+# marks a water meter. Gemini proposes them from their shape, or review adds them.
 FIXTURE_TAG_PATTERNS: dict[str, str] = {
     "water_closet": r"WC",
     "lavatory": r"LAV",
     "urinal": r"U",
     "floor_drain": r"FD",
     "cleanout": r"C\.?O\.?",
+    "kitchen_sink": r"KS",
+    "shower": r"SH",
+    "bathtub": r"BT",
+    "hose_bib": r"HB",
+    "drinking_fountain": r"DF",
 }
 
 # --- standard opening sizes (PH residential) -----------------------------

@@ -30,6 +30,7 @@ ElectricalDeviceId = Literal[
 ]
 PlumbingFixtureTag = Literal[
     "water_closet", "lavatory", "urinal", "floor_drain", "cleanout",
+    "kitchen_sink", "shower", "bathtub", "washing_machine", "hose_bib", "drinking_fountain",
 ]
 
 

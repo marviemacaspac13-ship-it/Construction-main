@@ -139,7 +139,9 @@ def test_replacement_preserves_unrelated_counts_and_ocr_observations(image, conf
     review=vision.validate_review(json.dumps(confirmation(result)),image,'test-user')
     observations=[FixtureTagObservation(tag=tag,x_px=1,y_px=1,score=.8) for tag in ['water_closet','lavatory','floor_drain']]
     counts,remaining=vision.apply_review({'water_closet':99,'lavatory':88,'floor_drain':3,'urinal':2},observations,review)
-    assert counts == {'water_closet':1,'lavatory':1,'floor_drain':3,'urinal':2}
+    # Under prompt v2 a Gemini review also covers urinals, so the label read of 2 is
+    # replaced by the review's confirmed 0; floor drains stay label-only.
+    assert counts == {'water_closet':1,'lavatory':1,'floor_drain':3,'urinal':0,'kitchen_sink':0,'shower':0,'bathtub':0,'washing_machine':0}
     assert [o.tag for o in remaining] == ['floor_drain']
 
 
@@ -152,7 +154,7 @@ def test_confirmed_small_plan_survives_original_refusal_and_snapshot_replay(imag
         reviewed=client.post('/api/estimate/image',files={'file':('plan.png',image,'image/png')},data={'plan_type':'Plumbing Plan','fixture_review':json.dumps(submitted)})
     assert reviewed.status_code==200,reviewed.text
     snapshot=EstimateInputSnapshot.model_validate(reviewed.json()['original_input'])
-    assert snapshot.plan.fixture_tags == {'water_closet':1,'lavatory':1}
+    assert snapshot.plan.fixture_tags == {'water_closet':1,'lavatory':1,'urinal':0,'kitchen_sink':0,'shower':0,'bathtub':0,'washing_machine':0}
     assert snapshot.plan.fixture_review.accepted[0].id==result['fixtures'][0]['id']
     assert reviewed.json()['estimate']['grand_total']>0
     replay=recalculate(snapshot,EstimateCorrections())

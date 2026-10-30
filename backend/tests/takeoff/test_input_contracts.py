@@ -78,7 +78,7 @@ def test_zero_corrections_are_not_replaced_by_defaults():
     {"slab_area_m2": float("inf")}, {"wall_height_m": 0},
     {"wall_height_m": 11}, {"electrical_counts": {"NOT_A_SKU": 1}},
     {"electrical_counts": {"OT01": 0.5}},
-    {"plumbing_counts": {"kitchen_sink": 1}},
+    {"plumbing_counts": {"bidet": 1}},
     {"plumbing_counts": {"water_closet": -1}}, {"wall_heigth_m": 3},
 ])
 def test_invalid_source_corrections_are_rejected(payload):

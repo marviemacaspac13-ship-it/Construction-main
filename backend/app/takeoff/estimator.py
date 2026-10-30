@@ -12,8 +12,9 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
+from app.plumbing_models import TAG_CLASSES, reviewed_classes
 from app.takeoff.bom import BomLine, merge_bom
-from app.takeoff.constants import RULES_VERSION
+from app.takeoff.constants import FIXTURE_TAG_PATTERNS, RULES_VERSION
 from app.takeoff.params import EstimatingParams
 from app.takeoff.rules import rules_for
 from app.takeoff.schema import PlanSchema
@@ -199,12 +200,14 @@ def estimate_plan(
     if plan.fixture_review is not None:
         tag_assumptions = _source_assumptions('tags')
         estimate.assumptions = [s for s in estimate.assumptions if s not in tag_assumptions] + ([
-            'All fixture counts originated as printed fixture tags (WC, LAV, U, FD, CO) read by OCR '
-            'and were explicitly reviewed; unlabelled fixtures are counted only where the user added them. '
-            'Later source corrections are recorded separately. '
+            f'All fixture counts originated as printed fixture tags '
+            f'({", ".join(TAG_CLASSES[t] for t in FIXTURE_TAG_PATTERNS)}) read by OCR and were '
+            'explicitly reviewed; unlabelled fixtures are counted only where '
+            'the user added them. Later source corrections are recorded separately. '
             'Fixture counts imply pipe/fitting allowances, not measured pipe routes.'
         ] if plan.fixture_review.provider == 'tags' else [
-            'WC/LAV counts originated as visual proposals and were explicitly reviewed. '
+            f'{"/".join(reviewed_classes(plan.fixture_review.provider, plan.fixture_review.prompt_version))} '
+            'counts originated as visual proposals and were explicitly reviewed. '
             'Other plumbing tags come from OCR; later source corrections are recorded separately. '
             'Fixture counts imply pipe/fitting allowances, not measured pipe routes.'
         ])

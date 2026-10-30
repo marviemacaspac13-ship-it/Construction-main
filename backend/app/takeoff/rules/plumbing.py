@@ -152,33 +152,31 @@ def _main_run(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
     Sized by the largest fixture on the plan: a water closet puts the main
     at 4 inches, and without one 2 inches carries it.
     """
-    served = sum(
-        count
-        for tag, count in plan.fixture_tags.items()
-        if count > 0 and FIXTURE_PLUMBING.get(tag)
-    )
-    if served <= 0 or params.main_run_m_per_fixture <= 0:
+    if params.main_run_m_per_fixture <= 0:
         return []
 
-    length_m = served * params.main_run_m_per_fixture
-    drain = "PDP03" if plan.fixture_tags.get("water_closet", 0) > 0 else "PDP01"
-
-    lines = [
-        _pipe_line(
-            drain,
-            length_m,
-            "plumbing.main_run",
-            f"{served} fixtures x {params.main_run_m_per_fixture:g} m of shared drain each",
-            params,
+    def serving(service: str) -> int:
+        return sum(
+            count
+            for tag, count in plan.fixture_tags.items()
+            if count > 0 and service in FIXTURE_PLUMBING.get(tag, {})
         )
-    ]
-    # Only fixtures that take water hang off the supply main; a floor drain
-    # is fed by nothing (see FIXTURE_PLUMBING).
-    supplied = sum(
-        count
-        for tag, count in plan.fixture_tags.items()
-        if count > 0 and "supply" in FIXTURE_PLUMBING.get(tag, {})
-    )
+
+    # Each main counts only the fixtures it serves: a floor drain is fed by
+    # nothing and a hose bib drains nowhere (see FIXTURE_PLUMBING).
+    drained, supplied = serving("drain"), serving("supply")
+    lines = []
+    if drained > 0:
+        drain = "PDP03" if plan.fixture_tags.get("water_closet", 0) > 0 else "PDP01"
+        lines.append(
+            _pipe_line(
+                drain,
+                drained * params.main_run_m_per_fixture,
+                "plumbing.main_run",
+                f"{drained} fixtures x {params.main_run_m_per_fixture:g} m of shared drain each",
+                params,
+            )
+        )
     if supplied > 0 and params.supply_branch_m_per_fixture > 0:
         lines.append(
             _pipe_line(

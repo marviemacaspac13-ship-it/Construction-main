@@ -164,7 +164,7 @@ def test_plumbing_reprices_branches_main_and_preserves_counted_only_cleanouts(or
 @pytest.mark.parametrize("field,value", [("column_count",-1), ("column_count",True), ("column_count",1.2),
     ("slab_area_m2",float("inf")), ("slab_area_m2",float("nan")), ("wall_height_m",0),
     ("slab_area_m2",True), ("wall_height_m","3.2"),
-    ("electrical_counts",{"PB01":1}), ("plumbing_counts",{"kitchen_sink":1}),
+    ("electrical_counts",{"PB01":1}), ("plumbing_counts",{"bidet":1}),
     ("electrical_counts",{"OT01":None})])
 def test_invalid_corrections_rejected(original, field, value):
     with pytest.raises(ValidationError):
