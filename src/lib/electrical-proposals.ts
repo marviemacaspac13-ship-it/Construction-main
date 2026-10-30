@@ -30,7 +30,7 @@ export type ElectricalReview = {
   version: string; source_sha256: string; image_width: number; image_height: number;
   owner_id: string; provider: string; model: string; proposed: ElectricalObservation[];
   choices: ElectricalChoice[]; confirmed_at: string; estimate_scope: 'standard' | 'devices_and_boxes' | 'reviewed_device_allowances';
-  prompt_version?: 'electrical-devices-v1' | null;
+  prompt_version?: 'electrical-devices-v1' | 'electrical-devices-v2' | null;
   attempts?: ElectricalProposal['attempts']; limitations?: string[];
 };
 

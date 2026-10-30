@@ -170,7 +170,7 @@ class ElectricalReview(ReviewModel):
     choices: list[ElectricalChoice] = Field(max_length=500)
     confirmed_at: AwareDatetime
     estimate_scope: ReviewedScope = 'standard'
-    prompt_version: Literal['electrical-devices-v1'] | None = Field(None, exclude_if=lambda v: v is None)
+    prompt_version: Literal['electrical-devices-v1', 'electrical-devices-v2'] | None = Field(None, exclude_if=lambda v: v is None)
     attempts: list[ElectricalProposalAttempt] = Field(default_factory=list, max_length=2, exclude_if=lambda v: not v)
     limitations: list[Annotated[str, Field(max_length=1000)]] = Field(default_factory=list, max_length=30, exclude_if=lambda v: not v)
 

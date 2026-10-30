@@ -33,7 +33,7 @@ class ProposalEnvelope(ReviewModel):
     model: str = Field(min_length=1, max_length=120)
     issued_at: float = Field(ge=0)
     proposed: list[ElectricalObservation] = Field(max_length=500)
-    prompt_version: str | None = Field(None, pattern=r'^electrical-devices-v1$', exclude_if=lambda v: v is None)
+    prompt_version: str | None = Field(None, pattern=r'^electrical-devices-v[12]$', exclude_if=lambda v: v is None)
     attempts: list[ElectricalProposalAttempt] = Field(default_factory=list, max_length=2, exclude_if=lambda v: not v)
     limitations: list[str] = Field(default_factory=list, max_length=30, exclude_if=lambda v: not v)
 

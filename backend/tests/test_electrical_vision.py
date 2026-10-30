@@ -1,6 +1,7 @@
 """Offline Gemini proposal and automatic local fallback boundaries."""
 from copy import deepcopy
 import asyncio
+import base64
 import io
 import json
 from unittest.mock import AsyncMock, patch
@@ -302,3 +303,54 @@ async def check_transport():
     with patch.object(vision,'post_json',AsyncMock(return_value=returned)):
         with pytest.raises(ValueError):await vision.call_model(None,'gemini-2.5-flash',encoded)
 
+
+
+def test_request_sends_the_drawing_first_then_each_labelled_reference_picture(raw,configured):
+    asyncio.run(check_reference_pictures())
+
+
+async def check_reference_pictures():
+    # Pictures fixed every outlet type on 04.jpg and doubled what 05.png found (30 Oct 2026,
+    # backend/datasets/electrical-reference-pictures-*); they must follow the drawing, labelled.
+    returned={'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':json.dumps(response())}]}}]}
+    with patch.object(vision,'post_json',AsyncMock(return_value=returned)) as post:
+        await vision.call_model(None,'gemini-2.5-flash','offline-image')
+    parts=post.await_args.kwargs['json']['contents'][0]['parts']
+    assert parts[0]=={'text':vision.PROMPT}
+    assert parts[1]=={'inlineData':{'mimeType':'image/jpeg','data':'offline-image'}}
+    labels,pictures=parts[2::2],parts[3::2]
+    assert [p['text'] for p in labels]==[f'Reference example, device_class {c}:' for c,_ in vision.REFERENCES]
+    assert [c for c,_ in vision.REFERENCES].count('light_point')==4
+    assert all(p['inlineData']['mimeType']=='image/png' for p in pictures) and len(pictures)==6
+    for picture in pictures:
+        with Image.open(io.BytesIO(base64.b64decode(picture['inlineData']['data']))) as image:
+            assert max(image.size)==128+32 and image.mode=='L'
+
+
+def test_reference_pictures_cannot_be_changed_through_the_symbol_library():
+    from app.templates_store import TEMPLATES_DIR
+    for _,path in vision.REFERENCES:
+        assert path.is_file() and TEMPLATES_DIR.resolve() not in path.resolve().parents
+
+
+def test_prompt_v2_says_only_the_drawing_is_boxed():
+    assert vision.PROMPT_VERSION=='electrical-devices-v2'
+    assert 'FIRST image is the drawing' in vision.PROMPT and 'never box them' in vision.PROMPT
+
+
+@pytest.mark.parametrize('version',['electrical-devices-v1','electrical-devices-v2'])
+def test_receipts_and_saved_reviews_from_either_prompt_version_still_confirm(raw,version):
+    # A v1 receipt lives 4 h, and saved projects keep their confirmed review for good.
+    observation=vision.parse_proposals(json.dumps(response()))[0]
+    receipt=boundary.issue_review(raw,'test-user',observation,provider='gemini',
+        model='gemini-3.6-flash',prompt_version=version)
+    c=ElectricalChoice(observation=observation[0],selected_sku='SW02',box_exclusion_reason='Box dimensions unavailable')
+    review=boundary.confirm_review(dict(receipt=receipt,confirmed=True,estimate_scope='devices_and_boxes',
+        choices=[c.model_dump()]),raw,'test-user')
+    assert ElectricalReview.model_validate_json(review.model_dump_json()).prompt_version==version
+
+
+def test_an_unknown_prompt_version_is_refused(raw):
+    with pytest.raises(ValueError):
+        boundary.issue_review(raw,'test-user',[],provider='gemini',model='gemini-3.6-flash',
+            prompt_version='electrical-devices-v3')

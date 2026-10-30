@@ -5,12 +5,16 @@ Actual free usage depends on the API project's tier, not on a request parameter.
 No billing upgrade, paid provider, model discovery or same-model retry exists.
 """
 import asyncio
+import base64
+from functools import lru_cache
 import json
 import logging
 import os
+from pathlib import Path
 import re
 import time
 
+import cv2
 import httpx
 from pydantic import ValidationError
 
@@ -19,7 +23,7 @@ from app.electrical_review import issue_review, _identity
 from app.electrical_grounding import refine_image_locations
 from app.plumbing_vision import image_payload
 
-PROMPT_VERSION = 'electrical-devices-v1'
+PROMPT_VERSION = 'electrical-devices-v2'
 PROMPT = '''Inspect this electrical construction drawing. Locate actual electrical
 device assemblies: ceiling/light points, convenience receptacles, switch assemblies,
 AC receptacles, and uncertain electrical devices. Use the drawing's legend and
@@ -40,7 +44,24 @@ gang_count (integer or null), switching_function (one_way/three_way/four_way/nul
 and uncertainty (string or null). Retain unclear symbols as unknown. No catalog
 SKUs, prices, box compatibility, circuit sizes, lengths or aggregate counts.
 State missed/unreadable areas and ambiguous types in limitations. Be conservative
-about tiny marks; a guessed type is not evidence.'''
+about tiny marks; a guessed type is not evidence.
+The FIRST image is the drawing; box_2d always refers to the first image only. The images
+after it are reference symbol examples, each preceded by its device_class. They are not part
+of the drawing: never box them. When the drawing has no legend, use them to tell device
+types apart; the drawing's own legend wins over them. Draughtsmen vary line weight, fill and
+tick placement, so judge by the closest match and keep unclear marks unknown.'''
+# Labelled library symbols sent after the drawing. Without them 3.6 Flash typed none of the
+# 9 outlets on 04.jpg right; with them all 9, and 05.png went from 16 to 31 of 41 devices
+# found, at 5 wrong types and 3 empty boxes for review (backend/datasets/
+# electrical-reference-pictures-*-2026-10-30). Copied from backend/templates/ into their own
+# folder so a Symbol Library edit cannot change what Gemini is shown.
+_REFERENCE_DIR = Path(__file__).resolve().parent / 'electrical_references'
+REFERENCES = [('convenience_outlet (duplex receptacle)', _REFERENCE_DIR / 'outlet_duplex.png'),
+    ('convenience_outlet (duplex receptacle, rotated)', _REFERENCE_DIR / 'outlet_duplex_rotated.png'),
+    ('light_point', _REFERENCE_DIR / 'light_ceiling_cross.png'),
+    ('light_point', _REFERENCE_DIR / 'light_pendant_fixture.png'),
+    ('light_point', _REFERENCE_DIR / 'light_surface_ceiling.png'),
+    ('light_point', _REFERENCE_DIR / 'light_ceiling_outlet.png')]
 OBSERVATION_SCHEMA=ElectricalObservation.model_json_schema()
 # Pydantic's fixed tuple emits prefixItems, which Gemini's array schema does
 # not support. Keep the strict tuple on our boundary and send homogeneous items.
@@ -131,10 +152,25 @@ def failure_detail(exc):
     return 'http_error'
 
 
+@lru_cache(maxsize=1)
+def reference_parts():
+    """Each symbol enlarged to 128 px on a white margin, as in the trial, after its label."""
+    parts=[]
+    for label,path in REFERENCES:
+        image=cv2.imread(str(path),cv2.IMREAD_GRAYSCALE)
+        h,w=image.shape;k=128/max(h,w)
+        image=cv2.resize(image,(round(w*k),round(h*k)),interpolation=cv2.INTER_CUBIC)
+        image=cv2.copyMakeBorder(image,16,16,16,16,cv2.BORDER_CONSTANT,value=255)
+        parts+=[{'text':f'Reference example, device_class {label}:'},
+                {'inlineData':{'mimeType':'image/png','data':base64.b64encode(cv2.imencode('.png',image)[1].tobytes()).decode()}}]
+    return parts
+
+
 async def call_model(client, model, encoded):
+    parts=[{'text':PROMPT},{'inlineData':{'mimeType':'image/jpeg','data':encoded}},*reference_parts()]
     data=await post_json(client,f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
         headers={'x-goog-api-key':os.environ['GEMINI_API_KEY']},json={
-            'contents':[{'role':'user','parts':[{'text':PROMPT},{'inlineData':{'mimeType':'image/jpeg','data':encoded}}]}],
+            'contents':[{'role':'user','parts':parts}],
             'generationConfig':{'temperature':0,'maxOutputTokens':24000,
                 'responseMimeType':'application/json','responseJsonSchema':SCHEMA}})
     candidate=data['candidates'][0]
