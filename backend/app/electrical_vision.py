@@ -2,7 +2,8 @@
 
 Only explicitly listed, free-tier-eligible Gemini models are accepted here.
 Actual free usage depends on the API project's tier, not on a request parameter.
-No billing upgrade, paid provider, model discovery or same-model retry exists.
+No billing upgrade, paid provider or model discovery exists. The one same-model retry is
+after a fast free-tier overload (503), and a scan never sends more than two requests.
 """
 import asyncio
 import base64
@@ -16,6 +17,7 @@ import time
 
 import cv2
 import httpx
+import numpy as np
 from pydantic import ValidationError
 
 from app.electrical_models import ElectricalObservation, ElectricalProposalAttempt, box_overlap
@@ -76,8 +78,15 @@ FREE_TIER_MODELS = frozenset({'gemini-3.8-flash', 'gemini-3.6-flash',
     'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'})
 # 3.6 Flash matched 12/21 reviewed marks against Flash-Lite's 2/21 (29 Oct 2026,
 # backend/datasets/electrical-whole-sheet-3.6-flash-2026-10-29); 3.8 Flash timed out.
-DEFAULT_MODELS = 'gemini-3.6-flash,gemini-3.5-flash-lite'
+# 3.6 Flash only since 30 Oct 2026: a failure goes straight to local. Flash-Lite, even with the
+# symbol pictures, read 08.png and 10.png worse than local (backend/datasets/
+# electrical-pictures-08-10-flash-models-2026-10-30); on 04/07 both are poor, Flash-Lite 2/21
+# and local 0/21.
+DEFAULT_MODELS = 'gemini-3.6-flash'
 MODEL_TIMEOUT_SECONDS = 60
+# Free-tier 503s fail in 2-5 s; 3.6 Flash failed 4 of its 11 requests on 30 Oct 2026, and the
+# owner allowed one retry of the last model after an overload (never after a timeout).
+OVERLOAD_RETRY_DELAY_SECONDS = 2
 TOTAL_TIMEOUT_SECONDS = 125
 _SLOTS = asyncio.Semaphore(2)
 logger = logging.getLogger('trace.electrical')
@@ -157,7 +166,14 @@ def reference_parts():
     """Each symbol enlarged to 128 px on a white margin, as in the trial, after its label."""
     parts=[]
     for label,path in REFERENCES:
-        image=cv2.imread(str(path),cv2.IMREAD_GRAYSCALE)
+        # imdecode, not imread: imread returns None for a non-ASCII path on Windows. A missing
+        # or broken picture raises ValueError, which the caller catches and falls back to local.
+        try:
+            image=cv2.imdecode(np.frombuffer(path.read_bytes(),np.uint8),cv2.IMREAD_GRAYSCALE)
+        except OSError:
+            image=None
+        if image is None:
+            raise ValueError(f'unreadable reference picture {path.name}')
         h,w=image.shape;k=128/max(h,w)
         image=cv2.resize(image,(round(w*k),round(h*k)),interpolation=cv2.INTER_CUBIC)
         image=cv2.copyMakeBorder(image,16,16,16,16,cv2.BORDER_CONSTANT,value=255)
@@ -208,11 +224,14 @@ async def find_proposals(raw, metadata, owner):
         except (TimeoutError,ValueError,OSError):
             return fallback
         async with httpx.AsyncClient(timeout=MODEL_TIMEOUT_SECONDS,follow_redirects=False,trust_env=False) as client:
-            for model in configured_models():
+            queue,requests=configured_models(),0
+            while queue:
+                model=queue.pop(0)
                 remaining=deadline-time.monotonic()
                 if remaining<=0:
                     break
                 started=time.monotonic()
+                requests+=1
                 try:
                     text,version=await asyncio.wait_for(call_model(client,model,encoded),min(MODEL_TIMEOUT_SECONDS,remaining))
                     observations,limitations=parse_proposals(text)
@@ -252,6 +271,11 @@ async def find_proposals(raw, metadata, owner):
                     # Account/auth/quota failures do not trigger more requests.
                     if status in (400,401,403,413,429):
                         break
+                    # At most two requests per scan, so attempts always fit the signed receipt.
+                    retry=status==503 and not queue and requests<2
+                    if retry and deadline-time.monotonic()>OVERLOAD_RETRY_DELAY_SECONDS:
+                        await asyncio.sleep(OVERLOAD_RETRY_DELAY_SECONDS)
+                        queue.append(model)
     finally:
         _SLOTS.release()
     return {**fallback,'attempts':attempts}

@@ -182,8 +182,10 @@ def test_paid_models_and_duplicates_are_not_added_to_fallback_order(monkeypatch)
 
 def test_default_uses_verified_replacement_and_ignores_rejected_legacy_model(monkeypatch):
     monkeypatch.delenv('ELECTRICAL_GEMINI_MODELS',raising=False)
-    # 3.6 Flash first since the 29 Oct 2026 trial (12/21 reviewed marks vs 2/21).
-    assert vision.configured_models()==['gemini-3.6-flash','gemini-3.5-flash-lite']
+    # 3.6 Flash only since 30 Oct 2026: a failure goes straight to local. 3.5 Flash-Lite read 8/19
+    # lights on 08 and 3/14 outlets on 10 against local's 19/19 and 9/14; on 04/07 both are poor
+    # (Flash-Lite 2/21, local 0/21 with 6 false hits).
+    assert vision.configured_models()==['gemini-3.6-flash']
     monkeypatch.setenv('ELECTRICAL_GEMINI_MODELS','gemini-2.5-flash-lite,gemini-3.5-flash-lite,gemini-flash-latest')
     assert vision.configured_models()==['gemini-3.5-flash-lite']
 
@@ -354,3 +356,78 @@ def test_an_unknown_prompt_version_is_refused(raw):
     with pytest.raises(ValueError):
         boundary.issue_review(raw,'test-user',[],provider='gemini',model='gemini-3.6-flash',
             prompt_version='electrical-devices-v3')
+
+
+@pytest.fixture
+def fresh_pictures():
+    vision.reference_parts.cache_clear()
+    yield
+    vision.reference_parts.cache_clear()
+
+
+def test_reference_pictures_load_from_a_folder_with_a_non_ascii_name(tmp_path,monkeypatch,fresh_pictures):
+    # cv2.imread returns None for such paths on Windows; a Filipino user folder can have one.
+    folder=tmp_path/'Peña'
+    folder.mkdir()
+    moved=[]
+    for label,path in vision.REFERENCES:
+        (folder/path.name).write_bytes(path.read_bytes())
+        moved.append((label,folder/path.name))
+    monkeypatch.setattr(vision,'REFERENCES',moved)
+    assert len(vision.reference_parts())==12
+
+
+@pytest.mark.parametrize('content',[b'not a png',None])
+def test_an_unreadable_or_missing_reference_picture_falls_back_to_local_detection(raw,configured,tmp_path,monkeypatch,fresh_pictures,content):
+    broken=tmp_path/'broken.png'
+    if content is not None:
+        broken.write_bytes(content)
+    monkeypatch.setattr(vision,'REFERENCES',[*vision.REFERENCES[:-1],('light_point',broken)])
+    returned={'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':json.dumps(response())}]}}]}
+    with patch.object(vision,'post_json',AsyncMock(return_value=returned)) as post:
+        result=TestClient(app).post('/api/electrical/proposals',files={'file':('plan.png',raw,'image/png')})
+    assert result.status_code==200,result.text
+    assert result.json()['provider']=='template' and post.await_count==0
+
+
+def overload():
+    request=httpx.Request('POST','https://generativelanguage.googleapis.com/test')
+    return httpx.HTTPStatusError('overloaded',request=request,response=httpx.Response(503,request=request))
+
+
+@pytest.fixture
+def one_model(configured,monkeypatch):
+    monkeypatch.setenv('ELECTRICAL_GEMINI_MODELS','gemini-3.6-flash')
+    monkeypatch.setattr(vision,'OVERLOAD_RETRY_DELAY_SECONDS',0)
+
+
+def test_a_free_tier_overload_is_retried_once_and_can_still_succeed(raw,one_model):
+    # Free-tier 503s fail in 2-5 s; 3.6 Flash failed 4 of 11 requests on 30 Oct 2026.
+    call=AsyncMock(side_effect=[overload(),(json.dumps(response()),'gemini-3.6-flash')])
+    with patch('app.main.match_templates',side_effect=AssertionError('no local')):
+        result=propose(raw,call)
+    assert call.await_count==2 and result['provider']=='gemini'
+    assert [a['outcome'] for a in result['attempts']]==['http_503','proposed']
+
+
+def test_a_second_overload_goes_to_local_without_a_third_request(raw,one_model):
+    call=AsyncMock(side_effect=[overload(),overload(),AssertionError('third request')])
+    with patch('app.main.match_templates',return_value=[]):
+        result=propose(raw,call)
+    assert call.await_count==2 and result['provider']=='template'
+
+
+def test_a_timeout_is_not_retried(raw,one_model):
+    # A 60 s timeout already spent the wait; only fast overloads earn a second upload.
+    call=AsyncMock(side_effect=[TimeoutError(),AssertionError('retry')])
+    with patch('app.main.match_templates',return_value=[]):
+        result=propose(raw,call)
+    assert call.await_count==1 and result['provider']=='template'
+
+
+def test_two_configured_models_still_send_at_most_two_requests(raw,configured,monkeypatch):
+    monkeypatch.setattr(vision,'OVERLOAD_RETRY_DELAY_SECONDS',0)
+    call=AsyncMock(side_effect=[overload(),overload(),AssertionError('third request')])
+    with patch('app.main.match_templates',return_value=[]):
+        result=propose(raw,call)
+    assert call.await_count==2 and [a['model'] for a in result['attempts']]==['gemini-2.5-flash','gemini-3.5-flash-lite']
