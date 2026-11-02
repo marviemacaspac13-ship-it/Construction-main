@@ -139,7 +139,7 @@ export function ResultsScreen() {
       <header className="min-h-[70px] flex flex-wrap gap-3 items-center justify-between px-4 sm:px-8 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-4">
           <span className="font-mono font-light text-foreground" style={{ letterSpacing: "12px", fontSize: "16px" }}>
-            TRACE
+            ARCE
           </span>
           <div className="w-px h-4 bg-border" />
           <button

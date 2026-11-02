@@ -18,7 +18,7 @@ export type PlanAsset = {
 };
 
 export function planFileError(file: Pick<File, 'type' | 'size'>): string | null {
-  if (!PLAN_IMAGE_TYPES.includes(file.type)) return 'Upload a PNG, JPG or WebP image. PDF is not supported yet.';
+  if (!PLAN_IMAGE_TYPES.includes(file.type)) return 'Upload a PNG, JPG or WebP image, or a PDF with only one page.';
   if (file.size <= 0 || file.size > MAX_PLAN_BYTES) return 'Upload a non-empty image no larger than 25 MB.';
   return null;
 }

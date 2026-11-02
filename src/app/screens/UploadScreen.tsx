@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CloudUpload, FolderOpen, Check, ChevronRight, ArrowLeft, X,
-  FileText, LayoutDashboard, Zap, Layers,
+  FileText, LayoutDashboard, Zap, Layers, Loader2,
 } from "lucide-react";
 import { SectionBar, Btn, Mono } from "../components/ui";
 import { useLocation, useNavigate } from "react-router";
 import type { ProjectDraft } from "../../lib/projects";
 import { DEFAULT_WALL_HEIGHT_M } from "../../lib/wall-height";
-import { planFileError } from "../../lib/plan-assets";
+import { preparePlanFile } from "../../lib/pdf-plan";
 import { uploadTips } from "../../lib/upload-guidance";
 
 /**
@@ -58,6 +58,9 @@ export function UploadScreen() {
   const [dragging, setDragging] = useState(false);
   const [file, setFile]         = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [convertedFrom, setConvertedFrom] = useState<string | null>(null);
+  const checkId = useRef(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const inputRef                = useRef<HTMLInputElement>(null);
 
@@ -71,15 +74,25 @@ export function UploadScreen() {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  const acceptFile = (f: File) => {
+  // Images are accepted as they are. A PDF must have exactly one page; it is
+  // rejected otherwise, and a one-page PDF is turned into an image for scanning.
+  const acceptFile = async (f: File) => {
+    const id = ++checkId.current; // a newer pick makes any older one stale
     setFileError("");
-    const error = planFileError(f);
-    if (error) {
-      setFileError(error);
-      setFile(null);
-      return;
+    setFile(null);
+    setConvertedFrom(null);
+    setChecking(true);
+    try {
+      const prepared = await preparePlanFile(f);
+      if (id !== checkId.current) return;
+      setFile(prepared.file);
+      setConvertedFrom(prepared.convertedFrom ?? null);
+    } catch (err) {
+      if (id !== checkId.current) return;
+      setFileError(err instanceof Error ? err.message : "This file could not be read. Try another file.");
+    } finally {
+      if (id === checkId.current) setChecking(false);
     }
-    setFile(f);
   };
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -148,7 +161,7 @@ export function UploadScreen() {
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
-            onClick={() => !file && inputRef.current?.click()}
+            onClick={() => !file && !checking && inputRef.current?.click()}
             className={`flex-1 border-2 border-dashed rounded-xl m-6 flex flex-col items-center justify-center gap-5 transition-colors ${
               file ? "cursor-default" : "cursor-pointer"
             } ${dragging ? "border-foreground/40 bg-foreground/5" : "border-border hover:border-foreground/20"}`}
@@ -169,9 +182,10 @@ export function UploadScreen() {
                       <span className="text-[12px] font-mono text-foreground truncate max-w-[280px]">{file.name}</span>
                     </div>
                     <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{formatBytes(file.size)}</p>
+                    {convertedFrom && <p className="text-[10px] font-mono text-muted-foreground mt-0.5">Page 1 of {convertedFrom}, converted to an image</p>}
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setFile(null); setFileError(""); }}
+                    onClick={(e) => { e.stopPropagation(); setFile(null); setFileError(""); setConvertedFrom(null); }}
                     className="w-6 h-6 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent press-scale shrink-0"
                   >
                     <X size={11} />
@@ -181,6 +195,11 @@ export function UploadScreen() {
                   Choose a different file
                 </Btn>
               </div>
+            ) : checking ? (
+              <div role="status" className="flex flex-col items-center gap-3 px-6">
+                <Loader2 size={24} strokeWidth={1.5} className="animate-spin text-muted-foreground" />
+                <p className="text-[12px] font-mono text-muted-foreground">Reading your file…</p>
+              </div>
             ) : (
               <>
                 <div className="w-16 h-16 border border-border rounded-xl flex items-center justify-center text-muted-foreground">
@@ -188,7 +207,7 @@ export function UploadScreen() {
                 </div>
                 <div className="text-center">
                   <p className="text-[13px] font-mono text-muted-foreground mb-1">Drag and drop your plan here</p>
-                  <p className="text-[10px] font-mono text-muted-foreground">PNG, JPG or WebP — up to 25 MB</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">PNG, JPG, WebP or a one-page PDF — up to 25 MB</p>
                 </div>
                 <Btn variant="secondary" icon={<FolderOpen size={11} />} onClick={(e) => { e?.stopPropagation(); inputRef.current?.click(); }}>
                   Select File
@@ -199,7 +218,7 @@ export function UploadScreen() {
               ref={inputRef}
               type="file"
               className="hidden"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) acceptFile(f); e.target.value = ""; }}
             />
           </div>

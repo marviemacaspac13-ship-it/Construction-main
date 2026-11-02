@@ -12,7 +12,7 @@ export function MenuDropdownScreen() {
         {/* Simulated topbar context */}
         <div className="w-full flex items-center justify-between h-[70px] px-8 border border-border rounded-lg bg-card mb-2">
           <div className="flex items-center gap-4">
-            <span className="font-mono font-light text-foreground" style={{ letterSpacing: "12px", fontSize: "15px" }}>TRACE</span>
+            <span className="font-mono font-light text-foreground" style={{ letterSpacing: "12px", fontSize: "15px" }}>ARCE</span>
             <div className="w-px h-4 bg-border" />
             <Mono>User</Mono>
           </div>

@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="h-screen flex flex-col bg-background overflow-hidden" style={{ fontFamily: "'Sora','Inter',sans-serif" }}>
       <header className="h-[70px] flex items-center justify-between px-8 border-b border-border bg-background shrink-0 relative z-20">
         <div className="flex items-center gap-4">
-          <span className="font-mono font-light text-foreground" style={{ letterSpacing: "12px", fontSize: "16px" }}>TRACE</span>
+          <span className="font-mono font-light text-foreground" style={{ letterSpacing: "12px", fontSize: "16px" }}>ARCE</span>
           <div className="w-px h-4 bg-border" />
           <Mono>{displayName}</Mono>
         </div>

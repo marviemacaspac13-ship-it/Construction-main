@@ -6,9 +6,9 @@ export function HelpScreen() {
   const [open, setOpen] = useState<number | null>(null);
 
   const faqs = [
-    { q: "What types of plans does TRACE support?",        a: "TRACE supports Floor Plans, Electrical Plans, and Plumbing Plans in PNG, JPG, and PDF formats." },
+    { q: "What types of plans does ARCE support?",        a: "ARCE supports Floor Plans, Electrical Plans, and Plumbing Plans as PNG, JPG or WebP images, or as a PDF with only one page." },
     { q: "Why is my estimate showing incorrect values?",   a: "Ensure your uploaded image is clear and high resolution. Blurry or low-quality scans may affect detection accuracy." },
-    { q: "Do I need an internet connection to use TRACE?", a: "Yes, TRACE requires an internet connection to perform AI-powered analysis on the server." },
+    { q: "Do I need an internet connection to use ARCE?", a: "Yes, ARCE requires an internet connection to perform AI-powered analysis on the server." },
     { q: "How do I contact a support representative?",     a: "Email support@trace.app — we respond within 24 hours on business days." },
     { q: "Error: No results detected — what does this mean?", a: "This usually means the uploaded image quality is too low, or the plan type selection does not match the file." },
   ];
@@ -16,8 +16,8 @@ export function HelpScreen() {
   const steps = [
     "Create an account and log in to access your dashboard",
     "Start a new project and select the appropriate plan type",
-    "Upload your plan image (PNG, JPG, or PDF)",
-    "Wait for TRACE to scan and analyze your plan",
+    "Upload your plan (PNG, JPG, WebP, or a one-page PDF)",
+    "Wait for ARCE to scan and analyze your plan",
     "Review the generated material table and export your report",
   ];
 
@@ -27,10 +27,10 @@ export function HelpScreen() {
 
       <div className="border border-border rounded-lg bg-card overflow-hidden mb-6">
         <div className="px-6 py-5 border-b border-border">
-          <p className="text-[13px] font-mono font-semibold text-foreground mb-2">Getting Started with TRACE</p>
+          <p className="text-[13px] font-mono font-semibold text-foreground mb-2">Getting Started with ARCE</p>
           <p className="text-[11px] font-mono text-muted-foreground leading-relaxed">
-            TRACE is a material cost estimation platform powered by AI. Upload your architectural plans
-            — Floor, Electrical, or Plumbing — and TRACE will automatically detect and quantify all
+            ARCE is a material cost estimation platform powered by AI. Upload your architectural plans
+            — Floor, Electrical, or Plumbing — and ARCE will automatically detect and quantify all
             relevant materials, providing you with accurate cost breakdowns in seconds.
           </p>
         </div>

@@ -67,7 +67,7 @@ export function FeedbackScreen() {
             <IconBox><MessageSquare size={14} /></IconBox>
             <div>
               <p className="text-[12px] font-mono font-semibold text-foreground">Submit Feedback</p>
-              <p className="text-[10px] font-mono text-muted-foreground">Let us know how we can improve TRACE.</p>
+              <p className="text-[10px] font-mono text-muted-foreground">Let us know how we can improve ARCE.</p>
             </div>
           </div>
 

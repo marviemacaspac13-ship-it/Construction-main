@@ -23,6 +23,9 @@ const TIPS: Record<string, string[]> = {
   ],
 };
 
+export const PDF_TIP =
+  "A PDF must have only one page. Export just the sheet you want scanned.";
+
 export function uploadTips(planType: string): string[] {
-  return [...(TIPS[planType] ?? []), ORIGINAL_EXPORT_TIP];
+  return [...(TIPS[planType] ?? []), PDF_TIP, ORIGINAL_EXPORT_TIP];
 }

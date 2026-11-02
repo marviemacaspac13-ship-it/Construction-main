@@ -320,7 +320,7 @@ export function ScanningScreen() {
 
       <p role="status" className="text-sm text-muted-foreground mb-2 text-center">{readerMessage || (uploading ? "Saving original plan…" : planType==='Plumbing Plan' ? 'Finding plumbing fixtures…' : planType==='Electrical Plan' ? 'Finding electrical devices…' : steps[step])}</p>
       <p className="text-[10px] font-mono text-muted-foreground/50 text-center max-w-xs leading-relaxed">
-        Sit back and relax while TRACE performs material cost estimation.
+        Sit back and relax while ARCE performs material cost estimation.
       </p>
 
       <style>{`@keyframes traceSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

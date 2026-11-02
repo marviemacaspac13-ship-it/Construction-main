@@ -14,7 +14,7 @@ import {
 import { Btn, FieldWrap, TxtArea, Mono } from "./ui";
 import type { ProjectDraft } from "../../lib/projects";
 import { DEFAULT_WALL_HEIGHT_M, MAX_WALL_HEIGHT_M, parseWallHeight } from "../../lib/wall-height";
-import { planFileError } from "../../lib/plan-assets";
+import { preparePlanFile } from "../../lib/pdf-plan";
 import { uploadTips } from "../../lib/upload-guidance";
 
 type Step = 1 | 2;
@@ -35,6 +35,9 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
   const [heightError, setHeightError] = useState("");
   const heightRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [convertedFrom, setConvertedFrom] = useState<string | null>(null);
+  const checkId = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
@@ -50,6 +53,9 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
       setWallHeight(String(DEFAULT_WALL_HEIGHT_M));
       setHeightError("");
       setFile(null);
+      setChecking(false);
+      setConvertedFrom(null);
+      checkId.current++;
       setDragging(false);
       setError("");
       setStarting(false);
@@ -71,15 +77,32 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
     };
   }, [open, onClose]);
 
+  // Images are accepted as they are. A PDF must have exactly one page; it is
+  // rejected otherwise, and a one-page PDF is turned into an image for scanning.
+  const acceptFile = async (f: File) => {
+    const id = ++checkId.current; // a newer pick makes any older one stale
+    setError("");
+    setFile(null);
+    setConvertedFrom(null);
+    setChecking(true);
+    try {
+      const prepared = await preparePlanFile(f);
+      if (id !== checkId.current) return;
+      setFile(prepared.file);
+      setConvertedFrom(prepared.convertedFrom ?? null);
+    } catch (err) {
+      if (id !== checkId.current) return;
+      setError(err instanceof Error ? err.message : "This file could not be read. Try another file.");
+    } finally {
+      if (id === checkId.current) setChecking(false);
+    }
+  };
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
     const f = e.dataTransfer.files?.[0];
-    if (f) {
-      const message = planFileError(f);
-      setError(message ?? "");
-      setFile(message ? null : f);
-    }
+    if (f) void acceptFile(f);
   }, []);
 
   if (!open) return null;
@@ -239,21 +262,25 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
                   <div className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg bg-accent/40 animate-pop-in">
                     <Check size={12} className="text-foreground" />
                     <span className="text-[11px] font-mono text-foreground">{file.name}</span>
+                    {convertedFrom && <span className="text-[10px] font-mono text-muted-foreground">(page 1 of PDF)</span>}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setFile(null);
+                        setConvertedFrom(null);
                       }}
                       className="text-muted-foreground hover:text-foreground press-scale"
                     >
                       <X size={11} />
                     </button>
                   </div>
+                ) : checking ? (
+                  <p role="status" className="text-[12px] font-mono text-muted-foreground">Reading your file…</p>
                 ) : (
                   <>
                     <div className="text-center">
                       <p className="text-[12px] font-mono text-muted-foreground mb-1">Drag and drop your plan file here</p>
-                      <p className="text-[10px] font-mono text-muted-foreground">PNG, JPG or WebP — up to 25 MB</p>
+                      <p className="text-[10px] font-mono text-muted-foreground">PNG, JPG, WebP or a one-page PDF — up to 25 MB</p>
                     </div>
                     <Btn
                       variant="secondary"
@@ -271,14 +298,11 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
                   ref={inputRef}
                   type="file"
                   className="hidden"
-                  accept="image/png,image/jpeg,image/webp"
+                  accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) {
-                      const message = planFileError(f);
-                      setError(message ?? "");
-                      setFile(message ? null : f);
-                    }
+                    if (f) void acceptFile(f);
+                    e.target.value = "";
                   }}
                 />
               </div>
