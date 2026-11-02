@@ -1,5 +1,6 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { MAX_PLAN_BYTES, planFileError } from "./plan-assets";
+import { paintedImages, renderScale } from "./pdf-render-scale";
 
 /**
  * PDF plans.
@@ -20,10 +21,6 @@ export type PreparedPlan = {
 };
 
 const PDF_MIME = "application/pdf";
-/** Long side of the rendered page. Sharp enough to read printed dimensions and tags. */
-const TARGET_LONG_SIDE = 4200;
-/** The backend refuses images above 40 million pixels; stay well under. */
-const MAX_RENDER_PIXELS = 24_000_000;
 
 export function isPdfFile(file: Pick<File, "type" | "name">): boolean {
   if (file.type === PDF_MIME) return true;
@@ -72,9 +69,10 @@ async function looksLikePdf(file: File): Promise<boolean> {
 async function renderFirstPage(doc: PDFDocumentProxy, name: string, lastModified: number): Promise<File> {
   const page = await doc.getPage(1);
   const base = page.getViewport({ scale: 1 });
-  let scale = TARGET_LONG_SIDE / Math.max(base.width, base.height);
-  const area = base.width * base.height * scale * scale;
-  if (area > MAX_RENDER_PIXELS) scale *= Math.sqrt(MAX_RENDER_PIXELS / area);
+  // A scanned or picture page is drawn at its picture's own resolution; see pdf-render-scale.ts.
+  const { OPS } = await loadPdfjs();
+  const ops = await page.getOperatorList();
+  let { scale } = renderScale(base.width, base.height, paintedImages(ops.fnArray, ops.argsArray, OPS));
 
   const stem = name.replace(/\.pdf$/i, "") || "plan";
   const canvas = document.createElement("canvas");
