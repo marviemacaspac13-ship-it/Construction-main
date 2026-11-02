@@ -1,0 +1,20 @@
+# systemd unit for the ARCE backend. Copy to /etc/systemd/system/arce-backend.service.
+# It reads backend/.env through load_dotenv() because WorkingDirectory is backend/.
+[Unit]
+Description=ARCE backend (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=arce
+Group=arce
+WorkingDirectory=/opt/arce/backend
+# One worker: OCR is CPU-bound and KVM 1 has one vCPU. More workers need more
+# cores, and the three *_SECRET values in backend/.env must be set (they are
+# what lets one worker accept a receipt another signed).
+ExecStart=/opt/arce/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

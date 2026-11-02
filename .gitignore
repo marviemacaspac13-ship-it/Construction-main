@@ -1,6 +1,7 @@
 # Secrets - these hold live Supabase keys and plaintext passwords
 .env
 .env.local
+.env.*.local
 backend/.env
 passwords.md
 
