@@ -311,7 +311,7 @@ What the nginx config already handles, and why each part matters:
 | Setting | Why |
 | --- | --- |
 | `client_max_body_size 30m` | nginx refuses uploads over 1 MB by default; plans are up to 25 MB |
-| `proxy_read_timeout 300s` | the default 60 s would cut off a two-minute plumbing scan |
+| `proxy_read_timeout 600s` | the default 60 s would cut off a plumbing scan. The slowest case on one vCPU (every Gemini model fails, then the labels are read locally) is ~206 s, and a slower core or two scans at once can double it |
 | `.mjs` served as JavaScript | otherwise the browser refuses to run the pdf.js worker and PDF upload breaks |
 | `try_files … /index.html` | lets a refresh on `/projects` load the app instead of a 404 |
 
@@ -404,6 +404,9 @@ Projects, saved estimates and uploaded plans live in Supabase, so back those up 
 ### Known limits on this setup
 
 - **One vCPU:** scans queue, and plumbing takes about two minutes (section 1).
+- **Scan time limit:** nginx waits 600 s for the backend. A scan that takes longer fails with a
+  504 "Gateway Timeout"; nothing is saved and the user scans again. If that ever happens, check
+  `journalctl -u arce-backend` for slow Gemini attempts and consider 2+ vCPU.
 - **Single backend worker:** a crash or restart interrupts scans in progress. systemd restarts it
   within 5 s.
 - **PDF uploads of vector drawings** render at 2000 px, a guess untested on a real vector plan
