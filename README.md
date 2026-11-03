@@ -6,7 +6,8 @@ TRACE reads construction plan images and produces material estimates in Philippi
 
 ARCE runs at **https://arce-app.tech** (since 3 November 2026), on a Hostinger VPS.
 [deploy/PRODUCTION.md](deploy/PRODUCTION.md) records that server, its settings and what is left
-to do; [deploy/HOSTINGER.md](deploy/HOSTINGER.md) is the step-by-step guide it was built from.
+to do; [deploy/HOSTINGER.md](deploy/HOSTINGER.md) is the step-by-step guide it was built from;
+[deploy/SERVER-ACCESS.md](deploy/SERVER-ACCESS.md) explains connecting to it from another device.
 To publish a new version, push to `main`, then run `sudo bash /opt/arce/deploy/update.sh` on the
 server.
 

@@ -69,6 +69,8 @@ JavaScript, and `http://` redirects to `https://`.
 
 ## Everyday operation
 
+To connect from a new laptop or PC, follow [SERVER-ACCESS.md](SERVER-ACCESS.md).
+
 | Task | On the server |
 | --- | --- |
 | Deploy a new version (after `git push`) | `sudo bash /opt/arce/deploy/update.sh` |
