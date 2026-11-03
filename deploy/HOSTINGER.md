@@ -3,6 +3,10 @@
 A plan and step-by-step guide for putting ARCE online on a Hostinger KVM VPS
 (written for **KVM 1**: 1 vCPU, 4 GB RAM, 50 GB NVMe). Budget one to two hours the first time.
 
+**Used for real on 3 Nov 2026** to put ARCE live at https://arce-app.tech; the three problems that
+install hit are fixed in the steps below. That deployment's details, settings and open items are
+in [PRODUCTION.md](PRODUCTION.md).
+
 Placeholders used throughout. Replace them with your own:
 
 | Placeholder | Meaning |
@@ -51,20 +55,26 @@ The files this guide installs live next to it in `deploy/`:
 
 ### What KVM 1 can and cannot do
 
-These numbers were measured on 2 Nov 2026 by running the real readers held to a single CPU
-core. A VPS core may be slower, so treat them as best case:
+Measured on the live KVM 1 server on 3 Nov 2026, one scan at a time, with Gemini on:
 
-| Scan (Gemini off) | 1 core | 12 cores | Peak memory |
+| Scan | Upload to review | Review to saved price | Peak memory* |
 | --- | --- | --- | --- |
-| Floor plan (`01`) | 15 s | 2.3 s | ~390 MB |
-| Plumbing labels (`03`) | **106 s** | 16 s | ~340 MB |
+| Floor plan (`01`), no Gemini | - | **7.5 s** | ~390 MB |
+| Same plan as a one-page PDF | - | 6.5 s | ~390 MB |
+| Plumbing restroom (`02`) | 27 s (Gemini) | **19 s** (floor-drain/cleanout labels, local) | ~340 MB |
+| Electrical (`05`) | ~48 s (Gemini) | 2 s | small |
 
+\* from a one-core run on a development PC; the server was not profiled.
+
+- The KVM 1 core is about twice as fast as the development PC's: the same work held to one core
+  there took 15 s (floor) and 106 s (plumbing labels), the figures this guide used to quote.
 - Memory, disk and bandwidth are more than enough.
-- **Plumbing scans take about two minutes**, with Gemini on as well: the floor-drain,
-  cleanout, hose-bib and drinking-fountain labels are always read locally.
+- **Gemini time is Google's, not the server's.** When it is overloaded (a 503) the app retries or
+  falls back to local reading, which is slower and weaker on electrical; one overload seen in
+  testing took 35 s to fail.
 - **Scans queue.** Two people scanning at once roughly double each other's wait.
-- Good enough for a demo or a handful of users. Move to 2+ vCPU before wider use.
-  The upgrade is done in hPanel and keeps the disk.
+- Fine for a demo or a handful of users. Move to 2+ vCPU before wider use; the upgrade is done in
+  hPanel and keeps the disk.
 
 ### Phases at a glance
 
@@ -416,7 +426,10 @@ Projects, saved estimates and uploaded plans live in Supabase, so back those up 
 
 ### Known limits on this setup
 
-- **One vCPU:** scans queue, and plumbing takes about two minutes (section 1).
+- **One vCPU:** scans queue; a plumbing scan takes about 45 s and a floor plan under 10 s
+  (section 1).
+- **A rebuild empties `/opt/arce/dist`.** `update.sh` runs `npm run build`, which deletes anything
+  placed there by hand (such as test drawings).
 - **Scan time limit:** nginx waits 600 s for the backend. A scan that takes longer fails with a
   504 "Gateway Timeout"; nothing is saved and the user scans again. If that ever happens, check
   `journalctl -u arce-backend` for slow Gemini attempts and consider 2+ vCPU.

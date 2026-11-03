@@ -2,6 +2,14 @@
 
 TRACE reads construction plan images and produces material estimates in Philippine pesos. A Vite frontend handles sign-in, projects and saved results through Supabase. A FastAPI service in `backend/` reads drawings and calculates estimates.
 
+## Live site
+
+ARCE runs at **https://arce-app.tech** (since 3 November 2026), on a Hostinger VPS.
+[deploy/PRODUCTION.md](deploy/PRODUCTION.md) records that server, its settings and what is left
+to do; [deploy/HOSTINGER.md](deploy/HOSTINGER.md) is the step-by-step guide it was built from.
+To publish a new version, push to `main`, then run `sudo bash /opt/arce/deploy/update.sh` on the
+server.
+
 ## Running it (Windows)
 
 1. Install **Python 3.13** (`winget install --id Python.Python.3.13`) and **Node.js** (https://nodejs.org).
