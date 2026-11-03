@@ -8,7 +8,7 @@ import type { ElectricalReview } from './electrical-proposals';
 export type PlanType = "Floor Plan" | "Electrical Plan" | "Plumbing Plan";
 export type PlanSource = "manual" | "detection" | "ocr" | "tags" | "cad";
 export type PlumbingFixtureTag = "water_closet" | "lavatory" | "urinal" | "floor_drain" | "cleanout"
-  | "kitchen_sink" | "shower" | "bathtub" | "hose_bib" | "drinking_fountain";
+  | "kitchen_sink" | "shower" | "bathtub";
 export type ElectricalDeviceId =
   | "GS01" | "GS02" | "GS03" | "SW01" | "SW02" | "SW03"
   | "OT01" | "OT02" | "OT03" | "ACO01" | "CLR01" | "CLR02" | "CLR03";

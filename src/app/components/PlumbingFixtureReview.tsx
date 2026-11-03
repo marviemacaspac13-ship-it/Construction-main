@@ -3,7 +3,7 @@ import { Plus, Minus, RotateCcw, Trash2, Pencil } from 'lucide-react';
 import { FIXTURE_COLORS, FIXTURE_NAMES, fixtureReviewError, fixtureSummary, moveFixtureBox, placeFixtureBox, resizeFixtureBox, reviewClasses, type FixtureBox, type FixtureClass, type FixtureProposal, type FixtureProposalResult } from '../../lib/plumbing-proposals';
 
 const colorNames: Record<FixtureClass, string> = {WC:'Red', LAV:'Blue', U:'Purple', FD:'Green', CO:'Orange',
-  KS:'Cyan', SH:'Pink', BT:'Indigo', HB:'Teal', DF:'Yellow'};
+  KS:'Cyan', SH:'Pink', BT:'Indigo'};
 const name = (cls: FixtureClass) => FIXTURE_NAMES[cls][0].replace(/^./, c => c.toUpperCase());
 const button = 'min-h-11 px-4 rounded-lg border border-border hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50';
 

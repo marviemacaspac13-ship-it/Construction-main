@@ -1,10 +1,11 @@
-"""Kitchen sinks, showers, bathtubs, hose bibs and drinking fountains.
+"""Kitchen sinks, showers and bathtubs.
 
-Added on 30 Oct 2026 at the owner's request. Labels find all five (KS, SH, BT, HB,
-DF). Gemini also proposes the drawn shapes it can box - urinals, kitchen sinks,
+Added on 30 Oct 2026 at the owner's request. Labels find all three (KS, SH, BT).
+Gemini also proposes the drawn shapes it can box - urinals, kitchen sinks,
 showers, bathtubs - under prompt version plumbing-bodies-v2.
 Their materials are the owner-approved estimating choice: a 2-inch drain and wye
-plus a 1/2-inch supply and tee, and a hose bib takes supply only.
+plus a 1/2-inch supply and tee. Hose bibs, drinking fountains and washing
+machines were added the same day and removed on 3 Nov 2026 at the client's request.
 """
 import json
 
@@ -21,8 +22,7 @@ from app.takeoff.params import EstimatingParams
 from app.takeoff.rules.plumbing import compute as plumbing_compute
 from app.takeoff.schema import PlanSchema
 
-NEW = {"kitchen_sink": "KS", "shower": "SH", "bathtub": "BT",
-       "hose_bib": "HB", "drinking_fountain": "DF"}
+NEW = {"kitchen_sink": "KS", "shower": "SH", "bathtub": "BT"}
 
 
 def plan(**tags):
@@ -44,22 +44,26 @@ def test_wm_is_not_read_as_a_washing_machine():
     assert tally(count_tags([TextBox("WM", 50, 50, .9, False)], FIXTURE_TAG_PATTERNS)) == {}
 
 
-@pytest.mark.parametrize("tag", ["kitchen_sink", "shower", "bathtub", "drinking_fountain"])
+@pytest.mark.parametrize("label", ["HB", "DF"])
+def test_hose_bibs_and_drinking_fountains_are_no_longer_read(label):
+    # Removed at the client's request on 3 Nov 2026.
+    assert tally(count_tags([TextBox(label, 50, 50, .9, False)], FIXTURE_TAG_PATTERNS)) == {}
+
+
+@pytest.mark.parametrize("tag", ["hose_bib", "drinking_fountain", "washing_machine"])
+def test_a_project_saved_with_a_removed_fixture_still_prices(tag, catalog):
+    # Projects saved 30 Oct - 3 Nov carry these keys, usually as a confirmed 0.
+    # They must still reprice; the removed type simply earns nothing.
+    with_old = estimate_plan(plan(water_closet=2, lavatory=2, **{tag: 1}), catalog)
+    without = estimate_plan(plan(water_closet=2, lavatory=2), catalog)
+    assert with_old.grand_total == without.grand_total
+
+
+@pytest.mark.parametrize("tag", ["kitchen_sink", "shower", "bathtub"])
 def test_a_drained_fixture_takes_a_two_inch_drain_and_half_inch_supply(tag):
     assert FIXTURE_PLUMBING[tag] == {"drain": "PDP01", "drain_fitting": "PVYO01",
                                      "supply": "PCSP01", "supply_fitting": "PVTB01"}
     assert {"PDP01", "PVYO01", "PCSP01", "PVTB01"} <= items(plumbing_compute(plan(**{tag: 1}), EstimatingParams()))
-
-
-def test_a_hose_bib_takes_supply_only_and_no_drain_main():
-    lines = plumbing_compute(plan(hose_bib=2), EstimatingParams())
-    assert items(lines) == {"PCSP01", "PVTB01"}
-
-
-def test_a_hose_bib_does_not_lengthen_the_drain_main():
-    with_bib = plumbing_compute(plan(water_closet=2, hose_bib=3), EstimatingParams())
-    drain_main = [li for li in with_bib if li.rule == "plumbing.main_run" and li.item_id == "PDP03"]
-    assert drain_main[0].inputs["route_length_m"] == pytest.approx(2 * 1.5)
 
 
 def test_the_new_materials_are_logged_as_assumptions(catalog):
@@ -85,7 +89,7 @@ def test_gemini_may_propose_the_drawn_fixtures():
         {"WC", "LAV", "U", "KS", "SH", "BT"}
 
 
-@pytest.mark.parametrize("label_only", ["FD", "CO", "HB", "DF"])
+@pytest.mark.parametrize("label_only", ["FD", "CO"])
 def test_gemini_may_not_propose_label_only_fixtures(label_only):
     with pytest.raises(ValueError):
         vision.parse_proposals(model_body(label_only))
@@ -115,7 +119,7 @@ def test_a_v1_gemini_review_still_covers_only_toilets_and_lavatories():
 
 def test_a_label_review_covers_every_tag():
     assert set(vision.reviewed_classes("tags", "plumbing-tags-v1")) == \
-        {"WC", "LAV", "U", "FD", "CO", "KS", "SH", "BT", "HB", "DF"}
+        {"WC", "LAV", "U", "FD", "CO", "KS", "SH", "BT"}
 
 
 def test_a_type_confirmed_as_none_is_kept_as_zero():
@@ -130,7 +134,7 @@ def test_the_label_review_ledger_names_the_labels_actually_read(catalog):
     plan = PlanSchema(plan_type="Plumbing Plan", source="tags", fixture_tags={"water_closet": 3},
                       fixture_review=review("plumbing-tags-v1", "WC", "WC", "WC", provider="tags"))
     line = next(a for a in estimate_plan(plan, catalog).assumptions if "printed fixture tags" in a)
-    assert "(WC, LAV, U, FD, CO, KS, SH, BT, HB, DF)" in line
+    assert "(WC, LAV, U, FD, CO, KS, SH, BT)" in line
 
 
 def test_every_fixture_list_names_the_same_types():

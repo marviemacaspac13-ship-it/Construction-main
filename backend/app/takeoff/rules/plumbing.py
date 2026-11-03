@@ -163,7 +163,7 @@ def _main_run(plan: PlanSchema, params: EstimatingParams) -> list[BomLine]:
         )
 
     # Each main counts only the fixtures it serves: a floor drain is fed by
-    # nothing and a hose bib drains nowhere (see FIXTURE_PLUMBING).
+    # nothing, so it lengthens the drain main only (see FIXTURE_PLUMBING).
     drained, supplied = serving("drain"), serving("supply")
     lines = []
     if drained > 0:

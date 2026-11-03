@@ -29,6 +29,6 @@ test('CSV preserves decimal amounts and escapes units, commas and quotes',()=>{
  'Item ID,Material,Unit,Unit Price,Quantity,Line Total\r\n"OT01","Outlet, ""duplex""","1/2""","1234.56","2","2469.12"');
 });
 test('the correction editor offers every priced plumbing fixture',()=>{
-  assert.deepEqual(Object.keys(plumbingLabels).sort(),['bathtub','cleanout','drinking_fountain','floor_drain','hose_bib',
+  assert.deepEqual(Object.keys(plumbingLabels).sort(),['bathtub','cleanout','floor_drain',
     'kitchen_sink','lavatory','shower','urinal','water_closet']);
 });

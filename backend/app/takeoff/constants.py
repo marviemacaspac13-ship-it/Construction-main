@@ -177,7 +177,9 @@ FIXTURE_PLUMBING: dict[str, dict[str, str]] = {
     "cleanout": {},
     # Added 30 Oct 2026, the owner's estimating choice rather than a plumbing
     # standard (none exists for this project): a 2" drain and wye plus a 1/2"
-    # supply and tee for each fixture below, and supply only for a hose bib.
+    # supply and tee for each fixture below. Hose bibs, drinking fountains and
+    # washing machines were added the same day and removed on 3 Nov 2026 at the
+    # client's request: they are no longer read, reviewed or priced.
     "kitchen_sink": {
         "drain": "PDP01", "drain_fitting": "PVYO01",
         "supply": "PCSP01", "supply_fitting": "PVTB01",
@@ -190,11 +192,6 @@ FIXTURE_PLUMBING: dict[str, dict[str, str]] = {
         "drain": "PDP01", "drain_fitting": "PVYO01",
         "supply": "PCSP01", "supply_fitting": "PVTB01",
     },
-    "drinking_fountain": {
-        "drain": "PDP01", "drain_fitting": "PVYO01",
-        "supply": "PCSP01", "supply_fitting": "PVTB01",
-    },
-    "hose_bib": {"supply": "PCSP01", "supply_fitting": "PVTB01"},
 }
 
 # The fewest material-bearing fixtures a whole sanitary layout can carry.
@@ -214,8 +211,6 @@ FIXTURE_TAG_PATTERNS: dict[str, str] = {
     "kitchen_sink": r"KS",
     "shower": r"SH",
     "bathtub": r"BT",
-    "hose_bib": r"HB",
-    "drinking_fountain": r"DF",
 }
 
 # --- standard opening sizes (PH residential) -----------------------------
