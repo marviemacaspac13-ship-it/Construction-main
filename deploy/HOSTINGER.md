@@ -164,6 +164,10 @@ apt -y install git curl ufw unattended-upgrades
 
 # A user for the app, so it never runs as root
 adduser --system --group --home /opt/arce --shell /bin/bash arce
+# adduser makes the home 750, which stops nginx reaching /opt/arce/dist (a 500 with
+# "Permission denied" in /var/log/nginx/error.log). 711 lets it pass through without listing;
+# the two .env files stay 600 (3 Nov 2026).
+chmod 711 /opt/arce
 
 # 2 GB swap as a safety net during npm builds (skip if `swapon --show` already lists some)
 fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
@@ -194,6 +198,11 @@ apt -y install python3.13 python3.13-venv python3.13-dev
 
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 apt -y install nodejs nginx certbot python3-certbot-nginx
+
+# OpenCV's graphics libraries. requirements.txt pins the headless OpenCV, but the OCR engine
+# (rapidocr-onnxruntime) also pulls in the full opencv-python, which needs these; without them
+# the backend dies at start with "libGL.so.1: cannot open shared object file" (3 Nov 2026).
+apt -y install libgl1 libglib2.0-0t64
 
 python3.13 --version   # Python 3.13.x
 node --version         # v22.x
@@ -296,8 +305,12 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 ```
 
-Now `http://arce.example.com` should show the sign-in page. Then add HTTPS. This needs the DNS
-record from Phase 2 to resolve, and it asks you to accept Let's Encrypt's terms:
+Now `http://arce.example.com` should show the sign-in page. Then add HTTPS. **HTTPS is required,
+not optional:** over plain `http://` (a domain or the bare IP) you can sign in, but every scan
+crashes to a blank page with `crypto.randomUUID is not a function`. Browsers only provide that
+on HTTPS or `localhost`, and the scan, review and correction screens all use it (found on the
+first server install, 3 Nov 2026). HTTPS needs the DNS record from Phase 2 to resolve, and it
+asks you to accept Let's Encrypt's terms:
 
 ```bash
 certbot --nginx -d arce.example.com --redirect -m you@example.com
