@@ -30,5 +30,5 @@ test('CSV preserves decimal amounts and escapes units, commas and quotes',()=>{
 });
 test('the correction editor offers every priced plumbing fixture',()=>{
   assert.deepEqual(Object.keys(plumbingLabels).sort(),['bathtub','cleanout','drinking_fountain','floor_drain','hose_bib',
-    'kitchen_sink','lavatory','shower','urinal','washing_machine','water_closet']);
+    'kitchen_sink','lavatory','shower','urinal','water_closet']);
 });

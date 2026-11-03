@@ -104,7 +104,7 @@ export function ElectricalDeviceReview({file,proposal,onConfirm,onUploadClearer}
           </>}
           {electricalChoiceError(chosen)&&<p role="status" className="text-sm text-muted-foreground">{electricalChoiceError(chosen)}</p>}
         </div>}
-        <button className={`${button} flex gap-2 items-center`} onClick={()=>{update(proposal.proposed.map(initialElectricalChoice));setSelected(proposal.proposed[0]?.id??'');setGroup(proposal.proposed[0]?.device_class??'unknown');setGroupIds([]);setEditing(false);}}><RotateCcw size={16}/>Restore proposals</button>
+        <button className={`${button} flex gap-2 items-center`} onClick={()=>{update(proposal.proposed.map(initialElectricalChoice));setSelected(proposal.proposed[0]?.id??'');setGroup(proposal.proposed[0]?.device_class??'unknown');setGroupIds([]);setEditing(false);}}><RotateCcw size={16}/>Restore default</button>
       </div>
     </div>
     {(geometryError||imageError)&&<p role="alert" className="text-sm text-destructive mt-5">{imageError?'The original image could not be displayed. Upload it again.':geometryError}</p>}

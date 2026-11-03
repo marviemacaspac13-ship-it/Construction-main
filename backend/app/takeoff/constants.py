@@ -190,10 +190,6 @@ FIXTURE_PLUMBING: dict[str, dict[str, str]] = {
         "drain": "PDP01", "drain_fitting": "PVYO01",
         "supply": "PCSP01", "supply_fitting": "PVTB01",
     },
-    "washing_machine": {
-        "drain": "PDP01", "drain_fitting": "PVYO01",
-        "supply": "PCSP01", "supply_fitting": "PVTB01",
-    },
     "drinking_fountain": {
         "drain": "PDP01", "drain_fitting": "PVYO01",
         "supply": "PCSP01", "supply_fitting": "PVTB01",
@@ -208,7 +204,7 @@ MIN_FIXTURES = 3
 
 # Tags as they are printed beside the fixture, for app/extract/tags.py.
 # Washing machines have no label here: on Philippine water-line layouts WM
-# marks a water meter. Gemini proposes them from their shape, or review adds them.
+# marks a water meter, so washing machines are not detected or priced.
 FIXTURE_TAG_PATTERNS: dict[str, str] = {
     "water_closet": r"WC",
     "lavatory": r"LAV",

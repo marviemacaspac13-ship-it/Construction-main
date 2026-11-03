@@ -1,8 +1,8 @@
-"""Kitchen sinks, showers, bathtubs, washing machines, hose bibs and drinking fountains.
+"""Kitchen sinks, showers, bathtubs, hose bibs and drinking fountains.
 
-Added on 30 Oct 2026 at the owner's request. Labels find all six (KS, SH, BT, WM, HB,
+Added on 30 Oct 2026 at the owner's request. Labels find all five (KS, SH, BT, HB,
 DF). Gemini also proposes the drawn shapes it can box - urinals, kitchen sinks,
-showers, bathtubs, washing machines - under prompt version plumbing-bodies-v2.
+showers, bathtubs - under prompt version plumbing-bodies-v2.
 Their materials are the owner-approved estimating choice: a 2-inch drain and wye
 plus a 1/2-inch supply and tee, and a hose bib takes supply only.
 """
@@ -21,7 +21,7 @@ from app.takeoff.params import EstimatingParams
 from app.takeoff.rules.plumbing import compute as plumbing_compute
 from app.takeoff.schema import PlanSchema
 
-NEW = {"kitchen_sink": "KS", "shower": "SH", "bathtub": "BT", "washing_machine": "WM",
+NEW = {"kitchen_sink": "KS", "shower": "SH", "bathtub": "BT",
        "hose_bib": "HB", "drinking_fountain": "DF"}
 
 
@@ -33,21 +33,18 @@ def items(lines):
     return {li.item_id for li in lines}
 
 
-LABELLED = {tag: label for tag, label in NEW.items() if tag != "washing_machine"}
-
-
 def test_each_new_label_is_counted():
-    boxes = [TextBox(label, 50 + 60 * i, 50, .9, False) for i, label in enumerate(LABELLED.values())]
-    assert tally(count_tags(boxes, FIXTURE_TAG_PATTERNS)) == {tag: 1 for tag in LABELLED}
+    boxes = [TextBox(label, 50 + 60 * i, 50, .9, False) for i, label in enumerate(NEW.values())]
+    assert tally(count_tags(boxes, FIXTURE_TAG_PATTERNS)) == {tag: 1 for tag in NEW}
 
 
 def test_wm_is_not_read_as_a_washing_machine():
     # On Philippine water-line layouts WM marks a water meter. Washing machines
-    # come from Gemini's shape proposals or are added by hand in review.
+    # are neither detected nor priced.
     assert tally(count_tags([TextBox("WM", 50, 50, .9, False)], FIXTURE_TAG_PATTERNS)) == {}
 
 
-@pytest.mark.parametrize("tag", ["kitchen_sink", "shower", "bathtub", "washing_machine", "drinking_fountain"])
+@pytest.mark.parametrize("tag", ["kitchen_sink", "shower", "bathtub", "drinking_fountain"])
 def test_a_drained_fixture_takes_a_two_inch_drain_and_half_inch_supply(tag):
     assert FIXTURE_PLUMBING[tag] == {"drain": "PDP01", "drain_fitting": "PVYO01",
                                      "supply": "PCSP01", "supply_fitting": "PVTB01"}
@@ -81,11 +78,11 @@ def model_body(*classes):
 
 
 def test_gemini_may_propose_the_drawn_fixtures():
-    fixtures, _ = vision.parse_proposals(model_body("WC", "LAV", "U", "KS", "SH", "BT", "WM"))
-    assert [f.fixture_class for f in fixtures] == ["WC", "LAV", "U", "KS", "SH", "BT", "WM"]
+    fixtures, _ = vision.parse_proposals(model_body("WC", "LAV", "U", "KS", "SH", "BT"))
+    assert [f.fixture_class for f in fixtures] == ["WC", "LAV", "U", "KS", "SH", "BT"]
     assert vision.PROMPT_VERSION == "plumbing-bodies-v2"
     assert set(vision.SCHEMA["properties"]["fixtures"]["items"]["properties"]["fixture_class"]["enum"]) == \
-        {"WC", "LAV", "U", "KS", "SH", "BT", "WM"}
+        {"WC", "LAV", "U", "KS", "SH", "BT"}
 
 
 @pytest.mark.parametrize("label_only", ["FD", "CO", "HB", "DF"])
@@ -118,7 +115,7 @@ def test_a_v1_gemini_review_still_covers_only_toilets_and_lavatories():
 
 def test_a_label_review_covers_every_tag():
     assert set(vision.reviewed_classes("tags", "plumbing-tags-v1")) == \
-        {"WC", "LAV", "U", "FD", "CO", "KS", "SH", "BT", "WM", "HB", "DF"}
+        {"WC", "LAV", "U", "FD", "CO", "KS", "SH", "BT", "HB", "DF"}
 
 
 def test_a_type_confirmed_as_none_is_kept_as_zero():

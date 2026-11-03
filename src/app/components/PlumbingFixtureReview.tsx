@@ -3,7 +3,7 @@ import { Plus, Minus, RotateCcw, Trash2, Pencil } from 'lucide-react';
 import { FIXTURE_COLORS, FIXTURE_NAMES, fixtureReviewError, fixtureSummary, moveFixtureBox, placeFixtureBox, resizeFixtureBox, reviewClasses, type FixtureBox, type FixtureClass, type FixtureProposal, type FixtureProposalResult } from '../../lib/plumbing-proposals';
 
 const colorNames: Record<FixtureClass, string> = {WC:'Red', LAV:'Blue', U:'Purple', FD:'Green', CO:'Orange',
-  KS:'Cyan', SH:'Pink', BT:'Indigo', WM:'Lime', HB:'Teal', DF:'Yellow'};
+  KS:'Cyan', SH:'Pink', BT:'Indigo', HB:'Teal', DF:'Yellow'};
 const name = (cls: FixtureClass) => FIXTURE_NAMES[cls][0].replace(/^./, c => c.toUpperCase());
 const button = 'min-h-11 px-4 rounded-lg border border-border hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50';
 
@@ -122,7 +122,7 @@ export function PlumbingFixtureReview({file, proposal, busy, onConfirm}: {
           <button className={`${button} w-full flex items-center justify-center gap-2`} disabled={busy} onClick={removeSelected}><Trash2 size={16}/>Remove fixture</button>
           <p className="text-sm text-muted-foreground">Keyboard: focus a box and use arrow keys to move it. Shift + arrows resize it. Delete removes it.</p>
         </>}
-        <button className={`${button} w-full flex items-center justify-center gap-2`} disabled={busy} onClick={()=>{update(proposal.fixtures);setSelected(proposal.fixtures[0]?.id??null);}}><RotateCcw size={16}/>Restore proposals</button>
+        <button className={`${button} w-full flex items-center justify-center gap-2`} disabled={busy} onClick={()=>{update(proposal.fixtures);setSelected(proposal.fixtures[0]?.id??null);}}><RotateCcw size={16}/>Restore default</button>
       </div>
     </div>
     {(error || imageError) && <p role="alert" className="text-sm text-destructive mt-5">{imageError?'The image could not be displayed. Upload the plan again.':error}</p>}

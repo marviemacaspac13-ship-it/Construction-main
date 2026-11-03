@@ -275,7 +275,7 @@ class EstimatingParams(BaseModel):
             ),
             (
                 "plumbing",
-                "Kitchen sinks, showers, bathtubs, washing machines and drinking fountains each "
+                "Kitchen sinks, showers, bathtubs and drinking fountains each "
                 "take a 2-inch drain with a wye and a 1/2-inch supply with a tee; a hose bib takes "
                 "supply only. These pairings are an estimating assumption chosen by the owner on "
                 "30 Oct 2026, not values from a plumbing standard.",

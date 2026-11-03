@@ -31,8 +31,8 @@ test('review rejects invalid coordinates and repeated IDs before confirmation',(
   assert.equal(fixtureReviewError([]),''); // Explicit review may exclude both classes; server guards empty priced plans.
 });
 test('a tag review covers every priced tag; a model review only the drawn fixtures',()=>{
-  assert.deepEqual(reviewClasses('tags'),['WC','LAV','U','FD','CO','KS','SH','BT','WM','HB','DF']);
-  assert.deepEqual(reviewClasses('gemini'),['WC','LAV','U','KS','SH','BT','WM']);
+  assert.deepEqual(reviewClasses('tags'),['WC','LAV','U','FD','CO','KS','SH','BT','HB','DF']);
+  assert.deepEqual(reviewClasses('gemini'),['WC','LAV','U','KS','SH','BT']);
   const drain=fixture('one',[10,10,40,40],'FD');
   assert.equal(fixtureReviewError([drain],reviewClasses('tags')),'');
   assert.notEqual(fixtureReviewError([drain],reviewClasses('gemini')),'');

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { LayoutDashboard, FolderOpen, Clock, HelpCircle, User, LogOut, MessageSquare, Cpu, Shapes } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Clock, HelpCircle, User, LogOut, MessageSquare, Cpu } from "lucide-react";
 import { Mono, Btn } from "./ui";
 import { supabase } from "../../lib/supabase";
 
@@ -40,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { path: "/dashboard",       Icon: LayoutDashboard, label: "Dashboard" },
     { path: "/projects",        Icon: FolderOpen,      label: "Projects"  },
     { path: "/history",         Icon: Clock,           label: "Estimation History" },
-    { path: "/symbol-library",  Icon: Shapes,          label: "Symbol Library" },
+    // Symbol Library is hidden from the menu for now; the /symbol-library route still works.
     { path: "/train-model",     Icon: Cpu,             label: "Train Model" },
   ];
 

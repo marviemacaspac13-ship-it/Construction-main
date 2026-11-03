@@ -10,17 +10,17 @@ class ProposalModel(BaseModel):
 
 Coordinate = Annotated[float, Field(ge=0, le=1000, strict=True)]
 # Model proposals carry WC/LAV; printed-tag proposals carry every tag the reader prices.
-FixtureClass = Literal['WC', 'LAV', 'U', 'FD', 'CO', 'KS', 'SH', 'BT', 'WM', 'HB', 'DF']
+FixtureClass = Literal['WC', 'LAV', 'U', 'FD', 'CO', 'KS', 'SH', 'BT', 'HB', 'DF']
 Provider = Literal['gemini', 'openrouter', 'tags']
 # Fixture tag (as priced in FIXTURE_PLUMBING) -> review class. The one map shared by
 # the label reader, the review and the ledger; tests/test_plumbing_more_fixtures.py
 # checks that every other fixture list names the same types.
 TAG_CLASSES = {'water_closet': 'WC', 'lavatory': 'LAV', 'urinal': 'U', 'floor_drain': 'FD', 'cleanout': 'CO',
-               'kitchen_sink': 'KS', 'shower': 'SH', 'bathtub': 'BT', 'washing_machine': 'WM',
+               'kitchen_sink': 'KS', 'shower': 'SH', 'bathtub': 'BT',
                'hose_bib': 'HB', 'drinking_fountain': 'DF'}
 # Drawn shapes a model can box. Floor drains, cleanouts, hose bibs and drinking
 # fountains are small marks found by their printed labels only.
-MODEL_CLASSES = ('WC', 'LAV', 'U', 'KS', 'SH', 'BT', 'WM')
+MODEL_CLASSES = ('WC', 'LAV', 'U', 'KS', 'SH', 'BT')
 # Receipts signed under prompt v1 asked for toilets and lavatories only.
 V1_MODEL_CLASSES = ('WC', 'LAV')
 
